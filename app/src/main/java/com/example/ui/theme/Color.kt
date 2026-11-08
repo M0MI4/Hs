@@ -36,3 +36,10 @@ val iOSDarkGetButtonBg = Color(0xFF2C2C2E)
 // Capsule & Badge Colors
 val iOSGetButtonText = Color(0xFF007AFF)
 val VerifiedBadgeGreen = Color(0xFF34C759)
+
+// iOS Switch Colors
+val iOSSwitchTrackOffLight = Color(0xFFE9E9EA)
+val iOSSwitchTrackOffDark = Color(0xFF39393D)
+val iOSSwitchBorderOffLight = Color(0xFFD1D1D6)
+val iOSSwitchBorderOffDark = Color(0xFF48484A)
+val iOSSwitchThumb = Color(0xFFFFFFFF)

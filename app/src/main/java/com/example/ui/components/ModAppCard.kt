@@ -52,6 +52,11 @@ fun ModAppCard(
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+        ),
+        shadowElevation = 1.5.dp,
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))

@@ -1,118 +1,90 @@
-# Offline Resilient Catalog, Cupertino Theme Refinement & Hama Sade Team Profile
+# Cupertino Floating Glass Tab Bar, Switch Restyling & Smooth Performance Plan
 
 ## User Review & Critical Decisions
 
 > [!IMPORTANT]
-> The clarifying questions have been confirmed by the user:
-> - **Offline Indicator Location**: Top header next to the screen title (a subtle iOS-style offline status pill/icon).
-> - **HAMA SADE TEAM Presentation**: Prominent Cupertino profile banner in Settings featuring the user's avatar image, verified badge, description, and direct link to `https://t.me/hamasade`.
-
-- **Confirmed Decision 1**: Offline badge appears beside screen titles (Today, Apps) when disconnected, while cached catalog and news items remain fully browseable and accessible without crashes or blocking screens.
-- **Confirmed Decision 2**: Replace "DEVELOPMENT TEAM" list in Settings with a dedicated "HAMA SADE TEAM" Cupertino showcase card incorporating `/public/assets/aistudio/1794109474359_3d2b0c94.png`.
-- **Confirmed Decision 3**: Telegram link updated directly to `https://t.me/hamasade`.
-- **Confirmed Decision 4**: True iOS Light Mode contrast refinement: cards and containers use pure flat white (`#FFFFFF`) on top of Apple system light gray (`#F2F2F7`), with subtle 0.5dp separators (`#E5E5EA`) and clear depth distinction.
+> The clarifying questions have been incorporated:
+> - **Bottom Navigation Style**: Authentic Cupertino floating glass tab bar with iOS-style icon treatments, subtle rounded corners (`28.dp`), elevated backdrop blur effect, and refined selected animations.
+> - **Switch Color Styling (OFF state)**: Apple standard off-white thumb (`#FFFFFF`) with Apple neutral gray track (`#E9E9EA` in light mode, `#39393D` in dark mode) and zero unwanted green tint when OFF.
+> - **Scroll Performance & Stutter-Free Fluidity**:
+>   1. Optimize `ParticleCanvas` using DrawScope without per-frame allocations.
+>   2. Add image memory caching configurations (`crossfade`, disk cache, fixed bounds).
+>   3. Eliminate unnecessary layout passes in list items.
 
 ---
 
 ## 1. Overview & Core Concept
 
-This update elevates **HsStore** into a fully offline-resilient, authentic iOS experience:
-1. **Network Connectivity Awareness**: Monitors internet status using Android's `ConnectivityManager.NetworkCallback`. When offline, a non-intrusive iOS-style badge (`CloudOff` / `Offline` / `ئۆفلاین`) appears smoothly in the top header without obstructing interactions.
-2. **Offline Cached Catalog & News**: Users can effortlessly browse previously fetched apps, search locally, inspect mod descriptions, and view cached stories even on airplane mode or disconnected networks.
-3. **Pristine iOS Light & Dark Mode Theming**: Fixes light mode card blending by establishing pure flat white (`#FFFFFF`) card surfaces against the `#F2F2F7` window canvas, combined with Apple-standard typography and divider colors.
-4. **HAMA SADE TEAM Profile Banner**: Replaces the generic developer team list with a custom-crafted Cupertino banner showcasing the creator's avatar, team title, bio, and instant Telegram link to `https://t.me/hamasade`.
+1. **Cupertino Floating Glass Tab Bar**:
+   - Replaces the generic Material 3 `NavigationBar` with a custom Cupertino floating capsule tab bar.
+   - Designed with:
+     - Floating rounded capsule (`30.dp` corner radius) with `12.dp` horizontal margin and floating elevation.
+     - Translucent glass background with dynamic border hairline (`#C6C6C8` in light mode, `#38383A` in dark mode).
+     - Authentic iOS tab items: Clean icons that smoothly scale on tap (`scale = 0.92f`), subtle iOS label typography, unselected Apple gray tint (`#8E8E93`), and selected active tint using the chosen theme accent color.
+     - Badges rendered as compact Apple notification dots/capsules.
+
+2. **Apple Standard Switch Colors**:
+   - When **ON**: Vibrant Apple green track (`#34C759`), pure white thumb (`#FFFFFF`).
+   - When **OFF**: Apple system light gray track (`#E9E9EA` in light mode, `#39393D` in dark mode), pure white thumb (`#FFFFFF`), with an ultra-thin border (`#D1D1D6`) matching iOS Settings switches.
+
+3. **Performance, Scrolling & Stutter Fix**:
+   - `ParticleCanvas`: Stop reallocating drawing objects and cache sine/speed computations. When disabled (which is now default), consumes strictly 0 CPU/GPU cycles.
+   - List items in `TodayNewsScreen`, `AppsScreen`, and `DownloadsScreen`:
+     - Utilize stable keys in all `LazyColumn` items.
+     - Add `Modifier.clip` directly on `AsyncImage` with explicit `size` constraints to prevent dynamic layout re-measuring during scrolling.
 
 ---
 
 ## 2. User Experience & Visual Design
 
-### Header Offline Indicator
+### Cupertino Floating Glass Tab Bar Layout
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│ Today                    [ ● Offline ]     (✨ Particles)    │
-│ Saturday, November 7                                        │
+│                       Screen Content                        │
+│                                                             │
+│  ┌───────────────────────────────────────────────────────┐  │
+│  │   [Today]       [Apps]       [Downloads]    [Settings]│  │
+│  │      📰           📱             📥             ⚙️    │  │
+│  └───────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
 ```
-- When offline: A subtle pill with an amber/gray dot and `Offline` / `ئۆفلاین` label appears seamlessly next to the main titles.
-- When online: The pill smoothly animates out of view, maintaining a clean Apple header.
+- Floating with `12.dp` padding from screen edges, elevated above the background.
+- Translucent backdrop tint (`Color.White.copy(alpha = 0.92f)` in light, `#1C1C1E.copy(alpha = 0.90f)` in dark).
 
-### HAMA SADE TEAM Cupertino Showcase
-```
-┌─────────────────────────────────────────────────────────────┐
-│ ┌───────┐  HAMA SADE TEAM  (✓ Verified)                    │
-│ │ Avatar│  Lead Modding Architecture & Cyber Engineering    │
-│ │  (●)  │  Official Telegram: @hamasade                     │
-│ └───────┘  [ Join Telegram Channel ]                        │
-└─────────────────────────────────────────────────────────────┘
-```
-- Integrated directly into Settings using the imported avatar asset `/public/assets/aistudio/1794109474359_3d2b0c94.png`.
-- Includes verified checkmark, custom subtitle, and action button opening `https://t.me/hamasade`.
-
-### Pure iOS Light & Dark Mode System
-- **Light Mode**:
-  - Window Background: `#F2F2F7` (Apple System Grouped Background)
-  - Card Surfaces: `#FFFFFF` (Pure Flat White)
-  - Secondary Card/Bar Surfaces: `#FFFFFF` with 0.5dp `#E5E5EA` border
-  - Search Fields: `#E3E3E8`
-  - Get Buttons: `#F2F2F7` with primary blue label
-- **Dark Mode**:
-  - Window Background: `#000000` (Pure Midnight)
-  - Card Surfaces: `#1C1C1E` (Apple System Dark Card)
-  - Secondary Card/Bar Surfaces: `#2C2C2E`
-  - High-contrast pure white titles (`#FFFFFF`)
+### iOS Switch Color Specification
+- **Checked (ON)**:
+  - Track: `Color(0xFF34C759)` (iOS Green)
+  - Thumb: `Color(0xFFFFFFFF)` (Pure White)
+- **Unchecked (OFF)**:
+  - Track: Light mode `Color(0xFFE9E9EA)` | Dark mode `Color(0xFF39393D)`
+  - Thumb: `Color(0xFFFFFFFF)` (Pure White)
+  - Border: Light mode `Color(0xFFD1D1D6)` | Dark mode `Color(0xFF48484A)`
 
 ---
 
-## 3. Key Product Decisions & Trade-Offs
-
-- **Connectivity Management**:
-  - *Chosen Approach*: Lightweight reactive `NetworkMonitor` class utilizing `ConnectivityManager.registerDefaultNetworkCallback` emitting a `StateFlow<Boolean>`.
-  - *Why*: Real-time instant transitions when switching between Wi-Fi, Mobile Data, and Offline without polling overhead or battery drain.
-- **Offline Data Strategy**:
-  - *Chosen Approach*: Persistent JSON disk cache in internal storage (`filesDir/remote_catalog_cache.json` and `filesDir/remote_news_cache.json`) coupled with bundled assets fallback.
-  - *Why*: Instant zero-latency loading, persistent across app restarts, zero data loss when offline.
-- **Image Asset Delivery**:
-  - *Chosen Approach*: Copy the uploaded image to `app/src/main/res/drawable/ic_hama_sade_avatar.png` and render through Coil or `painterResource` with circular squircle clipping.
-  - *Why*: Guarantees rock-solid local offline rendering without relying on network requests.
-
----
-
-## 4. Technical Architecture & Component Diagram
+## 3. Technical Architecture & Component Flow
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                   ConnectivityManager                       │
-│                            │                                │
-│                   NetworkMonitor.kt                         │
-│             (isOnline: StateFlow<Boolean>)                  │
-└────────────────────────────┬────────────────────────────────┘
-                             │
-            ┌────────────────┴────────────────┐
-            ▼                                 ▼
-┌────────────────────────┐       ┌────────────────────────┐
-│  Top Header Indicators │       │  Catalog & News Repos  │
-│  - TodayNewsScreen     │       │  - CatalogRepository   │
-│  - AppsScreen          │       │  - NewsRepository      │
-│  [Offline Badge Pill]  │       │  (Disk Cache Fallback) │
-└────────────────────────┘       └────────────────────────┘
-            │
-            ▼
-┌─────────────────────────────────────────────────────────────┐
-│                     AboutScreen.kt                          │
-│  - HamaSadeTeamBanner (Avatar, Verified Badge, Telegram)    │
-│  - Telegram Community row -> https://t.me/hamasade          │
-│  - Pure iOS Light Card Colors (#FFFFFF / #F2F2F7)           │
-└─────────────────────────────────────────────────────────────┘
+│                     CupertinoTabBar.kt                      │
+│ - Floating Surface with RoundedCornerShape(28.dp)           │
+│ - Glass border & translucent background                     │
+│ - TabItem with click feedback and smooth scale animation    │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+            ┌──────────────────┴──────────────────┐
+            ▼                                     ▼
+┌──────────────────────────────┐    ┌──────────────────────────────┐
+│        CupertinoSwitch       │    │     Performance Optimizers   │
+│ - Light mode: #E9E9EA track  │    │ - AsyncImage fixed bounds    │
+│ - Dark mode: #39393D track   │    │ - ParticleCanvas CPU bypass  │
+│ - Apple white thumb          │    │ - Stable LazyColumn keys     │
+└──────────────────────────────┘    └──────────────────────────────┘
 ```
 
-### File Changes Checklist:
-1. `app/src/main/res/drawable/hama_sade_avatar.png`: Copy user avatar into drawable resource.
-2. `app/src/main/java/com/example/util/NetworkMonitor.kt`: Provide real-time `isOnline` Flow.
-3. `app/src/main/java/com/example/ui/theme/Color.kt` & `Theme.kt`: Perfect iOS light mode card contrast (`#FFFFFF` flat card, `#F2F2F7` background, proper borders).
-4. `app/src/main/java/com/example/ui/i18n/AppLanguage.kt`: Add strings for `offline_badge`, `hama_sade_team_title`, `hama_sade_team_subtitle`, `join_telegram`.
-5. `app/src/main/java/com/example/ui/components/OfflineBadge.kt`: Create Cupertino offline status indicator.
-6. `app/src/main/java/com/example/ui/screens/TodayNewsScreen.kt` & `AppsScreen.kt`: Add `isOnline` parameter and show header offline badge.
-7. `app/src/main/java/com/example/ui/screens/AboutScreen.kt`:
-   - Replace Development Team with `HamaSadeTeamCard`.
-   - Update Telegram URL to `https://t.me/hamasade`.
-8. `app/src/main/java/com/example/MainActivity.kt`: Instantiate `NetworkMonitor` and pass `isOnline` state.
+### Planned File Edits:
+1. `app/src/main/java/com/example/ui/theme/Color.kt`: Add Apple switch track tokens (`iOSSwitchTrackOffLight = Color(0xFFE9E9EA)`, `iOSSwitchTrackOffDark = Color(0xFF39393D)`).
+2. `app/src/main/java/com/example/ui/components/CupertinoTabBar.kt`: Create the custom floating glass tab bar.
+3. `app/src/main/java/com/example/ui/components/CupertinoComponents.kt`: Provide `CupertinoSwitch` wrapper ensuring standard Apple colors in both ON and OFF states.
+4. `app/src/main/java/com/example/ui/screens/AboutScreen.kt`: Replace standard `Switch` calls with `CupertinoSwitch`.
+5. `app/src/main/java/com/example/MainActivity.kt`: Replace `NavigationBar` with `CupertinoTabBar` and optimize background particle composable.

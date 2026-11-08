@@ -156,8 +156,14 @@ class MainActivity : ComponentActivity() {
             val isOnline by networkMonitor.isOnline.collectAsState(initial = true)
 
             var themePreset by remember { mutableStateOf(ThemePreset.APPLE_BLUE) }
-            var isDarkTheme by remember { mutableStateOf(true) }
-            var particlesEnabled by remember { mutableStateOf(true) }
+            var isDarkTheme by remember {
+                val savedDark = prefs.getBoolean("theme_dark", true)
+                mutableStateOf(savedDark)
+            }
+            var particlesEnabled by remember {
+                val savedParticles = prefs.getBoolean("particles_enabled", false)
+                mutableStateOf(savedParticles)
+            }
             var particleDensity by remember { mutableStateOf(ParticleDensity.MEDIUM) }
 
             HsStoreTheme(preset = themePreset, darkTheme = isDarkTheme) {
@@ -174,8 +180,14 @@ class MainActivity : ComponentActivity() {
                     currentLanguage = currentLanguage,
                     isOnline = isOnline,
                     onThemePresetChanged = { themePreset = it },
-                    onDarkThemeToggled = { isDarkTheme = it },
-                    onParticlesEnabledToggled = { particlesEnabled = it },
+                    onDarkThemeToggled = {
+                        isDarkTheme = it
+                        prefs.edit().putBoolean("theme_dark", it).apply()
+                    },
+                    onParticlesEnabledToggled = {
+                        particlesEnabled = it
+                        prefs.edit().putBoolean("particles_enabled", it).apply()
+                    },
                     onParticleDensityChanged = { particleDensity = it },
                     onLanguageChanged = { lang ->
                         currentLanguage = lang
@@ -369,148 +381,14 @@ fun MainAppContent(
                             }
                         }
 
-                        // iOS Divider above Tab Bar
-                        Divider(
-                            color = if (isDarkTheme) iOSDarkSeparator else iOSLightSeparator,
-                            thickness = 0.5.dp
+                        // Authentic Apple iOS Floating Glass Tab Bar
+                        com.example.ui.components.CupertinoFloatingTabBar(
+                            currentTab = currentTab,
+                            onTabSelected = { currentTab = it },
+                            currentLanguage = currentLanguage,
+                            isDarkTheme = isDarkTheme,
+                            activeDownloadsCount = activeDownloads.size
                         )
-
-                        // iOS Cupertino Translucent Bottom Tab Bar (Localized tabs & authentic Apple layout)
-                        NavigationBar(
-                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
-                            tonalElevation = 0.dp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(56.dp)
-                                .testTag("bottom_nav_bar")
-                        ) {
-                            // 1. TODAY Tab (News, Banners & Editorial Stories)
-                            NavigationBarItem(
-                                selected = currentTab == MainTab.TODAY,
-                                onClick = { currentTab = MainTab.TODAY },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (currentTab == MainTab.TODAY) Icons.Filled.Today else Icons.Outlined.Today,
-                                        contentDescription = LocalizedStrings.get("tab_today", currentLanguage),
-                                        modifier = Modifier.size(23.dp)
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = LocalizedStrings.get("tab_today", currentLanguage),
-                                        fontSize = 10.sp,
-                                        fontWeight = if (currentTab == MainTab.TODAY) FontWeight.SemiBold else FontWeight.Normal
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                                    unselectedIconColor = Color(0xFF8E8E93),
-                                    unselectedTextColor = Color(0xFF8E8E93),
-                                    indicatorColor = Color.Transparent
-                                )
-                            )
-
-                            // 2. APPS Tab (Modded App Catalog & Categories)
-                            NavigationBarItem(
-                                selected = currentTab == MainTab.APPS,
-                                onClick = { currentTab = MainTab.APPS },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (currentTab == MainTab.APPS) Icons.Filled.Apps else Icons.Outlined.Apps,
-                                        contentDescription = LocalizedStrings.get("tab_apps", currentLanguage),
-                                        modifier = Modifier.size(23.dp)
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = LocalizedStrings.get("tab_apps", currentLanguage),
-                                        fontSize = 10.sp,
-                                        fontWeight = if (currentTab == MainTab.APPS) FontWeight.SemiBold else FontWeight.Normal
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                                    unselectedIconColor = Color(0xFF8E8E93),
-                                    unselectedTextColor = Color(0xFF8E8E93),
-                                    indicatorColor = Color.Transparent
-                                )
-                            )
-
-                            // 3. DOWNLOADS Tab (Active progress & Completed packages)
-                            NavigationBarItem(
-                                selected = currentTab == MainTab.DOWNLOADS,
-                                onClick = { currentTab = MainTab.DOWNLOADS },
-                                icon = {
-                                    if (activeDownloads.isNotEmpty()) {
-                                        BadgedBox(
-                                            badge = {
-                                                Badge(
-                                                    containerColor = MaterialTheme.colorScheme.primary,
-                                                    contentColor = Color.White
-                                                ) {
-                                                    Text("${activeDownloads.size}", fontSize = 9.sp)
-                                                }
-                                            }
-                                        ) {
-                                            Icon(
-                                                imageVector = if (currentTab == MainTab.DOWNLOADS) Icons.Filled.Download else Icons.Outlined.Download,
-                                                contentDescription = LocalizedStrings.get("tab_downloads", currentLanguage),
-                                                modifier = Modifier.size(23.dp)
-                                            )
-                                        }
-                                    } else {
-                                        Icon(
-                                            imageVector = if (currentTab == MainTab.DOWNLOADS) Icons.Filled.Download else Icons.Outlined.Download,
-                                            contentDescription = LocalizedStrings.get("tab_downloads", currentLanguage),
-                                            modifier = Modifier.size(23.dp)
-                                        )
-                                    }
-                                },
-                                label = {
-                                    Text(
-                                        text = LocalizedStrings.get("tab_downloads", currentLanguage),
-                                        fontSize = 10.sp,
-                                        fontWeight = if (currentTab == MainTab.DOWNLOADS) FontWeight.SemiBold else FontWeight.Normal
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                                    unselectedIconColor = Color(0xFF8E8E93),
-                                    unselectedTextColor = Color(0xFF8E8E93),
-                                    indicatorColor = Color.Transparent
-                                )
-                            )
-
-                            // 4. SETTINGS Tab (Appearance, Language, FX & Support)
-                            NavigationBarItem(
-                                selected = currentTab == MainTab.SETTINGS,
-                                onClick = { currentTab = MainTab.SETTINGS },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (currentTab == MainTab.SETTINGS) Icons.Filled.Settings else Icons.Outlined.Settings,
-                                        contentDescription = LocalizedStrings.get("tab_settings", currentLanguage),
-                                        modifier = Modifier.size(23.dp)
-                                    )
-                                },
-                                label = {
-                                    Text(
-                                        text = LocalizedStrings.get("tab_settings", currentLanguage),
-                                        fontSize = 10.sp,
-                                        fontWeight = if (currentTab == MainTab.SETTINGS) FontWeight.SemiBold else FontWeight.Normal
-                                    )
-                                },
-                                colors = NavigationBarItemDefaults.colors(
-                                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                                    unselectedIconColor = Color(0xFF8E8E93),
-                                    unselectedTextColor = Color(0xFF8E8E93),
-                                    indicatorColor = Color.Transparent
-                                )
-                            )
-                        }
                     }
                 }
             ) { paddingValues ->
@@ -632,43 +510,12 @@ fun MainAppContent(
                             isDarkTheme = isDarkTheme,
                             particlesEnabled = particlesEnabled,
                             particleDensity = particleDensity,
-                            userEmail = currentUser?.email,
-                            isAuthLoading = isAuthLoading,
                             currentLanguage = currentLanguage,
                             onPresetSelected = onThemePresetChanged,
                             onDarkThemeToggled = onDarkThemeToggled,
                             onParticlesEnabledToggled = onParticlesEnabledToggled,
                             onParticleDensityChanged = onParticleDensityChanged,
                             onLanguageChanged = onLanguageChanged,
-                            onGoogleSignInClick = {
-                                isAuthLoading = true
-                                signInWithGoogle(
-                                    context = context,
-                                    credentialManager = credentialManager,
-                                    scope = coroutineScope,
-                                    onAuthSuccess = {
-                                        isAuthLoading = false
-                                        currentUser = Firebase.auth.currentUser
-                                        Toast.makeText(context, "Signed in as ${currentUser?.email ?: "Google User"}", Toast.LENGTH_SHORT).show()
-                                    },
-                                    onAuthError = { err ->
-                                        isAuthLoading = false
-                                        Toast.makeText(context, "Sign in failed: $err", Toast.LENGTH_SHORT).show()
-                                    },
-                                    onAuthCancelled = {
-                                        isAuthLoading = false
-                                    }
-                                )
-                            },
-                            onSignOutClick = {
-                                isAuthLoading = true
-                                signOutGoogle(credentialManager, coroutineScope) {
-                                    isAuthLoading = false
-                                    currentUser = null
-                                    bookmarkedAppIds = emptySet()
-                                    Toast.makeText(context, "Signed out successfully", Toast.LENGTH_SHORT).show()
-                                }
-                            },
                             onSubmitFeedback = { type, subject, details, deviceInfo ->
                                 try {
                                     val docId = firestoreRepo.submitFeedback(type, subject, details, deviceInfo)

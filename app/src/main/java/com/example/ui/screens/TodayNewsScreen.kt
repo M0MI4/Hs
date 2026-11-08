@@ -196,39 +196,6 @@ fun TodayNewsScreen(
                         }
 
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            // Master Particle Quick Toggle Button
-                            Surface(
-                                shape = CircleShape,
-                                color = if (particlesEnabled) MaterialTheme.colorScheme.primary.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surfaceVariant,
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .clickable(onClick = onToggleParticles)
-                                    .testTag("today_particle_toggle_btn")
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Icon(
-                                        imageVector = if (particlesEnabled) Icons.Filled.AutoAwesome else Icons.Outlined.AutoAwesome,
-                                        contentDescription = "Toggle Particles",
-                                        tint = if (particlesEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.size(16.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                    Text(
-                                        text = if (particlesEnabled) LocalizedStrings.get("action_fx_on", currentLanguage) else LocalizedStrings.get("action_fx_off", currentLanguage),
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 11.sp,
-                                            color = if (particlesEnabled) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    )
-                                }
-                            }
-
-                            Spacer(modifier = Modifier.width(6.dp))
-
                             // Pull-to-refresh manual trigger icon
                             IconButton(
                                 onClick = onRefreshNews,
@@ -246,57 +213,7 @@ fun TodayNewsScreen(
                 }
             }
 
-            // 2. Breaking News Capsule (if active)
-            if (breakingNews != null) {
-                item {
-                    Surface(
-                        shape = RoundedCornerShape(12.dp),
-                        color = iOSSystemRed.copy(alpha = 0.12f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, iOSSystemRed.copy(alpha = 0.4f)),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp)
-                            .clickable { selectedStoryForDetail = breakingNews }
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = iOSSystemRed
-                            ) {
-                                Text(
-                                    text = LocalizedStrings.get("today_breaking", currentLanguage),
-                                    color = Color.White,
-                                    style = MaterialTheme.typography.labelSmall.copy(
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 10.sp
-                                    ),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(10.dp))
-                            Text(
-                                text = breakingNews.title,
-                                style = MaterialTheme.typography.bodyMedium.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 13.sp
-                                ),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Icon(
-                                imageVector = Icons.Default.OpenInNew,
-                                contentDescription = null,
-                                tint = iOSSystemRed,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                    }
-                }
-            }
+
 
             // 3. Search Field & Segmented Control
             item {
@@ -425,7 +342,11 @@ fun BannerNewsCard(
     Surface(
         shape = RoundedCornerShape(20.dp),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 3.dp,
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+        ),
+        shadowElevation = 2.dp,
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(20.dp))
@@ -616,7 +537,11 @@ fun TextOnlyNewsCard(
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+        ),
+        shadowElevation = 1.5.dp,
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))
@@ -782,7 +707,11 @@ fun PatchNotesCard(
     Surface(
         shape = RoundedCornerShape(18.dp),
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 2.dp,
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+        ),
+        shadowElevation = 1.5.dp,
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(18.dp))

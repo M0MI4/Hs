@@ -78,16 +78,12 @@ fun AboutScreen(
     isDarkTheme: Boolean,
     particlesEnabled: Boolean,
     particleDensity: ParticleDensity,
-    userEmail: String?,
-    isAuthLoading: Boolean,
     currentLanguage: AppLanguage = AppLanguage.ENGLISH,
     onPresetSelected: (ThemePreset) -> Unit,
     onDarkThemeToggled: (Boolean) -> Unit,
     onParticlesEnabledToggled: (Boolean) -> Unit,
     onParticleDensityChanged: (ParticleDensity) -> Unit,
     onLanguageChanged: (AppLanguage) -> Unit,
-    onGoogleSignInClick: () -> Unit,
-    onSignOutClick: () -> Unit,
     onSubmitFeedback: suspend (type: String, subject: String, details: String, deviceInfo: String) -> Result<String>,
     modifier: Modifier = Modifier
 ) {
@@ -168,75 +164,7 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-        // Section 2: User Account & Cloud Sync
-        item {
-            Text(
-                text = LocalizedStrings.get("settings_account_section", currentLanguage),
-                style = MaterialTheme.typography.labelSmall.copy(
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 12.sp,
-                    letterSpacing = 0.5.sp
-                ),
-                modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
-            )
 
-            CupertinoGroupedCard {
-                if (userEmail != null) {
-                    CupertinoSettingsRow(
-                        title = userEmail,
-                        subtitle = LocalizedStrings.get("settings_account_signed_in", currentLanguage),
-                        icon = Icons.Default.AccountCircle,
-                        iconBgColor = iOSSystemBlue,
-                        showDivider = true,
-                        trailingContent = {
-                            OutlinedButton(
-                                onClick = onSignOutClick,
-                                shape = CircleShape,
-                                modifier = Modifier.height(30.dp)
-                            ) {
-                                Text(
-                                    LocalizedStrings.get("action_sign_out", currentLanguage),
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        }
-                    )
-                } else {
-                    CupertinoSettingsRow(
-                        title = LocalizedStrings.get("settings_account_title", currentLanguage),
-                        subtitle = LocalizedStrings.get("settings_account_signed_out", currentLanguage),
-                        icon = Icons.Default.AccountCircle,
-                        iconBgColor = iOSSystemBlue,
-                        showDivider = true,
-                        trailingContent = {
-                            OutlinedButton(
-                                onClick = onGoogleSignInClick,
-                                shape = CircleShape,
-                                modifier = Modifier
-                                    .height(32.dp)
-                                    .testTag("google_signin_btn")
-                            ) {
-                                if (isAuthLoading) {
-                                    CircularProgressIndicator(
-                                        modifier = Modifier.size(16.dp),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        strokeWidth = 2.dp
-                                    )
-                                } else {
-                                    Text(
-                                        LocalizedStrings.get("action_sign_in", currentLanguage),
-                                        style = MaterialTheme.typography.labelSmall.copy(fontWeight = FontWeight.Bold)
-                                    )
-                                }
-                            }
-                        }
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.height(20.dp))
-        }
 
         // Section 3: Visual Experience & Particle Controls
         item {
@@ -261,13 +189,10 @@ fun AboutScreen(
                     showChevron = false,
                     showDivider = true,
                     trailingContent = {
-                        Switch(
+                        com.example.ui.components.CupertinoSwitch(
                             checked = particlesEnabled,
                             onCheckedChange = onParticlesEnabledToggled,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = iOSSystemGreen
-                            ),
+                            isDarkTheme = isDarkTheme,
                             modifier = Modifier.testTag("master_particle_switch")
                         )
                     }
@@ -316,13 +241,10 @@ fun AboutScreen(
                     showChevron = false,
                     showDivider = true,
                     trailingContent = {
-                        Switch(
+                        com.example.ui.components.CupertinoSwitch(
                             checked = isDarkTheme,
                             onCheckedChange = onDarkThemeToggled,
-                            colors = SwitchDefaults.colors(
-                                checkedThumbColor = Color.White,
-                                checkedTrackColor = iOSSystemGreen
-                            ),
+                            isDarkTheme = isDarkTheme,
                             modifier = Modifier.testTag("dark_mode_switch")
                         )
                     }

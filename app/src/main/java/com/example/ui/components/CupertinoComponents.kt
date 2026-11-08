@@ -160,8 +160,13 @@ fun CupertinoGroupedCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(12.dp),
+        shape = RoundedCornerShape(14.dp),
         color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(
+            0.5.dp,
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+        ),
+        shadowElevation = 1.dp,
         modifier = modifier.fillMaxWidth()
     ) {
         Column(content = content)
@@ -336,3 +341,33 @@ fun CupertinoPullToRefreshBox(
         content()
     }
 }
+
+/**
+ * Authentic Apple iOS Cupertino Switch
+ * Ensures pure white thumb and exact iOS light/dark gray track when OFF
+ */
+@Composable
+fun CupertinoSwitch(
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+    isDarkTheme: Boolean = true
+) {
+    val trackOffColor = if (isDarkTheme) com.example.ui.theme.iOSSwitchTrackOffDark else com.example.ui.theme.iOSSwitchTrackOffLight
+    val borderOffColor = if (isDarkTheme) com.example.ui.theme.iOSSwitchBorderOffDark else com.example.ui.theme.iOSSwitchBorderOffLight
+
+    Switch(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        colors = SwitchDefaults.colors(
+            checkedThumbColor = com.example.ui.theme.iOSSwitchThumb,
+            checkedTrackColor = com.example.ui.theme.iOSSystemGreen,
+            checkedBorderColor = Color.Transparent,
+            uncheckedThumbColor = com.example.ui.theme.iOSSwitchThumb,
+            uncheckedTrackColor = trackOffColor,
+            uncheckedBorderColor = borderOffColor
+        ),
+        modifier = modifier
+    )
+}
+
