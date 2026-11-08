@@ -1,0 +1,187 @@
+[
+  {
+    "id": "app_cyber_vpn",
+    "name": "CyberGhost Pro Mod",
+    "packageName": "com.cybersec.vpn.mod",
+    "category": "Tools",
+    "version": "8.4.2",
+    "versionCode": 842,
+    "sizeBytes": 34812720,
+    "sizeDisplay": "33.2 MB",
+    "iconUrl": "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=150&auto=format&fit=crop&q=80",
+    "downloadUrl": "https://raw.githubusercontent.com/hsstore/mods-repo/main/apks/cyber_vpn_mod.apk",
+    "sha256": "4b5d2a93c780962809e2051db57e53f1917f6920fbbad9e9b068df65c82a7201",
+    "description": "High-speed encrypted VPN with unlimited bandwidth, custom DNS routing, and kill-switch functionality. Fully unlocked VIP tier.",
+    "modFeatures": [
+      "VIP Premium Unlocked",
+      "Zero Ads / Analytics Disabled",
+      "Dedicated High-Speed WireGuard Nodes",
+      "Split Tunneling Enabled"
+    ],
+    "changelog": "Added 12 new low-latency Tokyo and Frankfurt nodes. Fixed DNS leak on Android 15.",
+    "rating": 4.9,
+    "downloadsCount": 184500,
+    "isVerified": true,
+    "author": "GhostTeam Labs",
+    "updatedDate": "Nov 4, 2026",
+    "permissionsRequired": [
+      "Network Full Access",
+      "VPN Service Protocol",
+      "Run at Startup"
+    ]
+  },
+  {
+    "id": "app_retro_emu",
+    "name": "Nova Emulator Ultra",
+    "packageName": "com.retrocore.nova.mod",
+    "category": "Emulators",
+    "version": "3.1.0",
+    "versionCode": 310,
+    "sizeBytes": 52428800,
+    "sizeDisplay": "50.0 MB",
+    "iconUrl": "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=150&auto=format&fit=crop&q=80",
+    "downloadUrl": "https://raw.githubusercontent.com/hsstore/mods-repo/main/apks/nova_emu_ultra.apk",
+    "sha256": "8f31b01c9985a109841c6e4389dfae554289431bf6985cb93e6c0c663bcda122",
+    "description": "All-in-one retro gaming engine supporting 18 classic consoles with 4K upscaling, custom CRT shaders, and instant rewind states.",
+    "modFeatures": [
+      "Gold License Unlocked",
+      "All Premium Shaders Active",
+      "Unlimited Save/Load States",
+      "Bluetooth Gamepad Mapping Presets"
+    ],
+    "changelog": "Vulkan rendering pipeline optimized. Added support for DualSense wireless rumble.",
+    "rating": 4.8,
+    "downloadsCount": 92300,
+    "isVerified": true,
+    "author": "CyberRetro",
+    "updatedDate": "Nov 2, 2026",
+    "permissionsRequired": [
+      "Storage Access (ROM loading)",
+      "Bluetooth Connect",
+      "Audio Output"
+    ]
+  },
+  {
+    "id": "app_music_stream",
+    "name": "SoundWave Studio Mod",
+    "packageName": "com.audiovibe.soundwave.mod",
+    "category": "Media",
+    "version": "9.9.5",
+    "versionCode": 995,
+    "sizeBytes": 41943040,
+    "sizeDisplay": "40.0 MB",
+    "iconUrl": "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=150&auto=format&fit=crop&q=80",
+    "downloadUrl": "https://raw.githubusercontent.com/hsstore/mods-repo/main/apks/soundwave_mod.apk",
+    "sha256": "09a1c84f509e53b21814e419b67f1b268f7422f77e23b123985fa8156dbbe014",
+    "description": "Lossless FLAC and Hi-Res audio player with master equalizer presets, unlimited skips, offline playlist caching, and no commercial interruptions.",
+    "modFeatures": [
+      "Extreme Audio Quality (320kbps + FLAC)",
+      "Unlimited Next Track Skips",
+      "No Audio or Visual Ads",
+      "Custom Visualizer Engine"
+    ],
+    "changelog": "Integrated 10-band parametric EQ. Fixed lockscreen media control latency.",
+    "rating": 4.9,
+    "downloadsCount": 312000,
+    "isVerified": true,
+    "author": "VibeAudio Devs",
+    "updatedDate": "Oct 29, 2026",
+    "permissionsRequired": [
+      "Foreground Service",
+      "Audio Playback",
+      "Internet Access"
+    ]
+  },
+  {
+    "id": "app_terminal_pro",
+    "name": "HexRoot Shell & Tweaker",
+    "packageName": "com.hextools.shell.mod",
+    "category": "Tweaks",
+    "version": "4.2.1",
+    "versionCode": 421,
+    "sizeBytes": 18874368,
+    "sizeDisplay": "18.0 MB",
+    "iconUrl": "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=150&auto=format&fit=crop&q=80",
+    "downloadUrl": "https://raw.githubusercontent.com/hsstore/mods-repo/main/apks/hexroot_tweaker.apk",
+    "sha256": "771e89b4f2c06915b4d708816c49a37cb90c76251b5380590a369e802095cd7b",
+    "description": "Terminal emulator with custom ZSH shell, CPU governor manager, thermal profile overrides, and package debloater for root and non-root users.",
+    "modFeatures": [
+      "Pro Developer License Included",
+      "Custom Cyber Neon Themes",
+      "SSH Key Agent Auto-Sync",
+      "Battery Performance Tweaks"
+    ],
+    "changelog": "New automated script scheduler added. Supports Android 16 system dumps.",
+    "rating": 4.7,
+    "downloadsCount": 64100,
+    "isVerified": true,
+    "author": "HexWare",
+    "updatedDate": "Nov 6, 2026",
+    "permissionsRequired": [
+      "Battery Optimization Exemption",
+      "Internal Storage",
+      "Write Secure Settings (via Shizuku/ADB)"
+    ]
+  },
+  {
+    "id": "app_shadow_rpg",
+    "name": "ShadowBlade: Rebirth Mod",
+    "packageName": "com.cyberblade.rpg.mod",
+    "category": "Games",
+    "version": "2.8.0",
+    "versionCode": 280,
+    "sizeBytes": 98566144,
+    "sizeDisplay": "94.0 MB",
+    "iconUrl": "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=150&auto=format&fit=crop&q=80",
+    "downloadUrl": "https://raw.githubusercontent.com/hsstore/mods-repo/main/apks/shadowblade_mod.apk",
+    "sha256": "bc037f59ea0619a8427f71f654b4f590b14c33d71e7a68e0d49f0ec1d4416ae8",
+    "description": "Fast-paced hack-and-slash cyberpunk action RPG with customizable cyberware upgrades, offline campaign, and 120 FPS high refresh rate.",
+    "modFeatures": [
+      "Unlimited Gold & Cyber-Credits",
+      "All Legendary Swords Unlocked",
+      "God Mode Toggle in Menu",
+      "Full Offline Play Supported"
+    ],
+    "changelog": "Chapter 9 Neo-Tokyo Boss Fight added. Improved gamepad touch emulation.",
+    "rating": 4.9,
+    "downloadsCount": 420900,
+    "isVerified": true,
+    "author": "BladeForge",
+    "updatedDate": "Nov 1, 2026",
+    "permissionsRequired": [
+      "Storage Access",
+      "Vibration Feedback",
+      "Network State"
+    ]
+  },
+  {
+    "id": "app_photo_fx",
+    "name": "Lumina Synth FX Mod",
+    "packageName": "com.synthphoto.lumina.mod",
+    "category": "Tools",
+    "version": "5.6.0",
+    "versionCode": 560,
+    "sizeBytes": 67108864,
+    "sizeDisplay": "64.0 MB",
+    "iconUrl": "https://images.unsplash.com/photo-1518770660439-4636190af475?w=150&auto=format&fit=crop&q=80",
+    "downloadUrl": "https://raw.githubusercontent.com/hsstore/mods-repo/main/apks/lumina_fx_mod.apk",
+    "sha256": "2e9a593fd127201c70e28f2da6645ec932e67df149b8089dc004ca8101fb1e06",
+    "description": "Professional photo & video post-processing tool with neon flare filters, synthwave chromatic aberration, and AI object removal.",
+    "modFeatures": [
+      "All 80+ Premium Filters Unlocked",
+      "No Watermark on 4K Export",
+      "Unrestricted AI Face & Skin Refine",
+      "RAW DNG Format Processing"
+    ],
+    "changelog": "Export speed boosted by 40% using OpenCL acceleration. Added Vaporwave preset pack.",
+    "rating": 4.6,
+    "downloadsCount": 115000,
+    "isVerified": true,
+    "author": "Lumina Arts",
+    "updatedDate": "Oct 27, 2026",
+    "permissionsRequired": [
+      "Camera & Gallery Access",
+      "Media Processing"
+    ]
+  }
+]

@@ -1,0 +1,158 @@
+{
+  "entities": {
+    "DeviceConfig": {
+      "title": "DeviceConfig",
+      "description": "Synced configuration and installed mod list for remote device management.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Unique identifier of the authenticated user."
+        },
+        "deviceId": {
+          "type": "string",
+          "description": "Unique identifier of the mobile device."
+        },
+        "deviceName": {
+          "type": "string",
+          "description": "Human-readable device model name."
+        },
+        "installedApps": {
+          "type": "array",
+          "description": "List of installed modded app IDs."
+        },
+        "customConfigJson": {
+          "type": "string",
+          "description": "Serialized JSON string containing remote settings."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "deviceId", "deviceName", "customConfigJson"]
+    },
+    "UserDownload": {
+      "title": "UserDownload",
+      "description": "Record of an app download or installation associated with a user account.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "User ID owning the download history item."
+        },
+        "appId": {
+          "type": "string",
+          "description": "ID of the modded app."
+        },
+        "appName": {
+          "type": "string",
+          "description": "Title of the modded app."
+        },
+        "version": {
+          "type": "string",
+          "description": "App version string."
+        },
+        "status": {
+          "type": "string",
+          "description": "Current status: COMPLETED, QUEUED, DOWNLOADING, FAILED."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "appId", "appName", "version", "status"]
+    },
+    "UserBookmark": {
+      "title": "UserBookmark",
+      "description": "Bookmarked / favorited app for rapid access across devices.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "User ID."
+        },
+        "appId": {
+          "type": "string",
+          "description": "ID of the bookmarked app."
+        },
+        "appName": {
+          "type": "string",
+          "description": "Name of the app."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "appId", "appName"]
+    },
+    "FeedbackReport": {
+      "title": "FeedbackReport",
+      "description": "User feedback, suggestions, or crash report submission.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "User ID or ANONYMOUS if submitted before auth."
+        },
+        "type": {
+          "type": "string",
+          "description": "Type: BUG, SUGGESTION, CRASH, GENERAL."
+        },
+        "subject": {
+          "type": "string",
+          "description": "Short headline of the feedback."
+        },
+        "details": {
+          "type": "string",
+          "description": "Detailed explanation or crash traceback."
+        },
+        "deviceInfo": {
+          "type": "string",
+          "description": "Device metadata like model, OS version, app build."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time"
+        }
+      },
+      "required": ["userId", "type", "subject", "details"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/device_configs/{configId}": {
+      "schema": {
+        "$ref": "#/entities/DeviceConfig"
+      },
+      "description": "Stores per-device configuration and sync state for remote management."
+    },
+    "/users/{userId}/downloads/{downloadId}": {
+      "schema": {
+        "$ref": "#/entities/UserDownload"
+      },
+      "description": "Stores user download history and active installations."
+    },
+    "/users/{userId}/bookmarks/{appId}": {
+      "schema": {
+        "$ref": "#/entities/UserBookmark"
+      },
+      "description": "Stores bookmarked favorite apps."
+    },
+    "/feedback/{feedbackId}": {
+      "schema": {
+        "$ref": "#/entities/FeedbackReport"
+      },
+      "description": "Community feedback, suggestions, and crash reports."
+    }
+  }
+}

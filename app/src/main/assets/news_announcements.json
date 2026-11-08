@@ -1,0 +1,94 @@
+[
+  {
+    "id": "news_ios_launch",
+    "type": "BANNER",
+    "title": "HsStore v1.3: iOS Cupertino Edition Rolled Out",
+    "subtitle": "Immersive Apple design language, lightning-fast pull-to-refresh, and ambient particle controls.",
+    "bannerUrl": "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&q=80",
+    "tag": "MAJOR RELEASE",
+    "date": "Today",
+    "readTime": "2 min read",
+    "author": "HsStore Architecture",
+    "authorRole": "Core Team",
+    "content": "Welcome to the all-new HsStore experience. Built completely around authentic Apple iOS design principles, the new interface features clean Cupertino segmented controls, translucent frosted navigation bars, and instant pull-to-refresh. You can now toggle background particle effects anytime to optimize battery life.",
+    "bulletPoints": [
+      "Authentic iOS App Store layout with dedicated Today news feed and Apps directory",
+      "Full Pull-To-Refresh on Today, Apps, and Downloads queues",
+      "Instant Master Particle Switch in header and settings",
+      "Independent remote News JSON controller via Pastebin (CTpQXLcc)",
+      "Embedded crash telemetry and feedback directly in Settings"
+    ],
+    "linkedAppId": "app_retro_emu",
+    "linkedAppName": "RetroArch Platinum",
+    "isPinned": true,
+    "isBreaking": false
+  },
+  {
+    "id": "news_security_audit",
+    "type": "TEXT_ONLY",
+    "title": "Security Bulletin: SHA-256 Package Integrity Shield",
+    "subtitle": "Automated cryptographic sandbox verification across all community mod packages.",
+    "bannerUrl": "",
+    "tag": "SECURITY ADVISORY",
+    "date": "Nov 6, 2026",
+    "readTime": "3 min read",
+    "author": "Security Audit Squad",
+    "authorRole": "CyberSec",
+    "content": "Security is the foundation of HsStore. Every APK submission is automatically disassembled, decompiled, and analyzed against malicious heuristics. The SHA-256 cryptographic checksum is published openly on every download card so power users can verify cryptographic integrity before installation.",
+    "bulletPoints": [
+      "100% automated DEX inspection for undeclared trackers",
+      "Real-time download verification checksum against tampering",
+      "Zero-permission storage compliance with Android 14+ Photo Picker",
+      "Sandbox execution auditing prior to public listing"
+    ],
+    "linkedAppId": null,
+    "linkedAppName": null,
+    "isPinned": false,
+    "isBreaking": true
+  },
+  {
+    "id": "news_spotlight_theme",
+    "type": "BANNER",
+    "title": "Custom Themes: Neon Cyan, Toxic Emerald & Apple Indigo",
+    "subtitle": "Fine-tune your workspace with dynamic OLED black appearances and custom accent palettes.",
+    "bannerUrl": "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=1200&q=80",
+    "tag": "SPOTLIGHT",
+    "date": "Nov 4, 2026",
+    "readTime": "2 min read",
+    "author": "Design Guild",
+    "authorRole": "Visuals",
+    "content": "Make HsStore truly yours. Switch between midnight OLED black and crisp light modes, choose from four hand-crafted Apple accent presets (Classic Blue, Indigo Pro, Purple Neon, Mint Green), and customize background particle velocity.",
+    "bulletPoints": [
+      "Midnight OLED theme reduces battery drain on AMOLED displays",
+      "Apple SF-inspired typography and translucent glass materials",
+      "Subtle, Medium, or Dense ambient particle physics engine"
+    ],
+    "linkedAppId": null,
+    "linkedAppName": null,
+    "isPinned": false,
+    "isBreaking": false
+  },
+  {
+    "id": "news_patch_1_3",
+    "type": "PATCH_NOTES",
+    "title": "HsStore v1.3 Patch Notes & Changelog",
+    "subtitle": "Performance improvements, network resilience, and dual remote JSON sync.",
+    "bannerUrl": "",
+    "tag": "PATCH NOTES",
+    "date": "Nov 2, 2026",
+    "readTime": "1 min read",
+    "author": "Release Engineering",
+    "authorRole": "DevOps",
+    "content": "Here is what changed in this version. We updated our network engine with dual Retrofit services to separate the app catalogue from community announcements, enabling rapid push updates without touching the package index.",
+    "bulletPoints": [
+      "Separate Pastebin controllers for Apps (GEZX8zve) and News (CTpQXLcc)",
+      "Adaptive fallback when Pastebin contains raw placeholder text",
+      "Offline disk caching prevents cold-start delays",
+      "Smooth 60fps pull-to-refresh swipe gesture"
+    ],
+    "linkedAppId": null,
+    "linkedAppName": null,
+    "isPinned": false,
+    "isBreaking": false
+  }
+]

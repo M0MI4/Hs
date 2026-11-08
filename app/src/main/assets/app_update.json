@@ -1,0 +1,20 @@
+{
+  "storeLatestVersion": "1.2.5",
+  "storeLatestVersionCode": 25,
+  "currentVersionCode": 1,
+  "mandatory": false,
+  "showDialog": false,
+  "title": "HsStore Cyber Upgrade v1.2.5",
+  "announcementMessage": "HsStore 1.2.5 is now live! Featuring multi-device JSON synchronization, active download speed booster, SHA-256 integrity scanner, and new Toxic Emerald theme.",
+  "downloadUrl": "https://raw.githubusercontent.com/hsstore/releases/main/hsstore_v1.2.5.apk",
+  "sizeDisplay": "14.2 MB",
+  "sha256": "3a884f2910cd027158be6107312e9bca9a572619714efdc78b87e5b804561a32",
+  "publishedAt": "November 2026",
+  "changelog": [
+    "Integrated multi-device remote management via hosted JSON schemas",
+    "GPU-accelerated neon particle system with custom density controls",
+    "SHA-256 package signature audit and permission analyzer",
+    "Automated background update checking with interactive notification curtain",
+    "Firebase Cloud synchronization for bookmarks and download queues"
+  ]
+}
