@@ -2,16 +2,25 @@ package com.example.ui.components
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -22,10 +31,11 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.material.icons.filled.Update
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Divider
@@ -40,13 +50,18 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -56,10 +71,13 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.example.data.model.ModApp
 import com.example.ui.theme.VerifiedBadgeGreen
-import com.example.ui.theme.iOSLightBackground
+import com.example.util.AppInstallState
+import com.example.util.InstallStatusHelper
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -73,6 +91,19 @@ fun AppDetailSheet(
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    // Dynamic App Install State (GET, UPDATE, OPEN)
+    val installState = remember(app.packageName, app.versionCode) {
+        InstallStatusHelper.getAppInstallState(context, app.packageName, app.versionCode)
+    }
+
+    // Lightbox State
+    var lightboxInitialIndex by remember { mutableStateOf<Int?>(null) }
+
+    // Curated high quality app preview screenshots based on app theme
+    val screenshots = remember(app.id, app.category) {
+        getSampleScreenshotsForApp(app)
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -98,7 +129,7 @@ fun AppDetailSheet(
                 .verticalScroll(rememberScrollState())
                 .padding(bottom = 36.dp)
         ) {
-            // Header: Squircle Icon, Title, Author & GET Capsule
+            // Header: Squircle Icon, Title, Author & Dynamic Action Capsule
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -153,13 +184,22 @@ fun AppDetailSheet(
                     )
                 }
 
-                // Apple GET Button
+                // Apple Dynamic Capsule Button (GET, UPDATE, OPEN)
                 CupertinoGetButton(
-                    text = "GET",
+                    text = installState.label,
                     isHighlighted = true,
                     onClick = {
-                        onStartDownload()
-                        onDismiss()
+                        when (installState) {
+                            AppInstallState.OPEN -> {
+                                val launched = InstallStatusHelper.launchInstalledApp(context, app.packageName)
+                                if (!launched) onStartDownload()
+                                onDismiss()
+                            }
+                            AppInstallState.UPDATE, AppInstallState.GET -> {
+                                onStartDownload()
+                                onDismiss()
+                            }
+                        }
                     }
                 )
             }
@@ -210,7 +250,7 @@ fun AppDetailSheet(
 
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = "SECURITY",
+                        text = "STATUS",
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 10.sp,
@@ -218,22 +258,17 @@ fun AppDetailSheet(
                         )
                     )
                     Spacer(modifier = Modifier.height(2.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Shield,
-                            contentDescription = null,
-                            tint = VerifiedBadgeGreen,
-                            modifier = Modifier.size(15.dp)
+                    Text(
+                        text = when (installState) {
+                            AppInstallState.OPEN -> "Installed"
+                            AppInstallState.UPDATE -> "Update Avail"
+                            AppInstallState.GET -> "Ready to Get"
+                        },
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = if (installState == AppInstallState.OPEN) VerifiedBadgeGreen else MaterialTheme.colorScheme.primary
                         )
-                        Spacer(modifier = Modifier.width(3.dp))
-                        Text(
-                            text = "Verified",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = VerifiedBadgeGreen
-                            )
-                        )
-                    }
+                    )
                 }
 
                 Divider(
@@ -257,6 +292,47 @@ fun AppDetailSheet(
                         text = app.category,
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(18.dp))
+
+            // iOS Screenshots Carousel
+            Text(
+                text = "PREVIEW SCREENSHOTS",
+                style = MaterialTheme.typography.labelSmall.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    letterSpacing = 0.6.sp
+                )
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(end = 12.dp)
+            ) {
+                itemsIndexed(screenshots) { index, url ->
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = androidx.compose.foundation.BorderStroke(
+                            0.5.dp,
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                        ),
+                        modifier = Modifier
+                            .width(130.dp)
+                            .height(220.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { lightboxInitialIndex = index }
+                    ) {
+                        AsyncImage(
+                            model = url,
+                            contentDescription = "Screenshot ${index + 1}",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
 
@@ -410,15 +486,28 @@ fun AppDetailSheet(
 
             Spacer(modifier = Modifier.height(26.dp))
 
-            // Action Button
+            // Primary Bottom Action Button (Adapts to GET, UPDATE, OPEN)
             Button(
                 onClick = {
-                    onStartDownload()
-                    onDismiss()
+                    when (installState) {
+                        AppInstallState.OPEN -> {
+                            val launched = InstallStatusHelper.launchInstalledApp(context, app.packageName)
+                            if (!launched) onStartDownload()
+                            onDismiss()
+                        }
+                        AppInstallState.UPDATE, AppInstallState.GET -> {
+                            onStartDownload()
+                            onDismiss()
+                        }
+                    }
                 },
                 shape = CircleShape,
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
+                    containerColor = when (installState) {
+                        AppInstallState.OPEN -> VerifiedBadgeGreen
+                        AppInstallState.UPDATE -> Color(0xFFFF9500)
+                        AppInstallState.GET -> MaterialTheme.colorScheme.primary
+                    },
                     contentColor = Color.White
                 ),
                 modifier = Modifier
@@ -426,13 +515,196 @@ fun AppDetailSheet(
                     .height(48.dp)
                     .testTag("detail_download_action")
             ) {
-                Icon(imageVector = Icons.Default.Download, contentDescription = null, modifier = Modifier.size(18.dp))
+                Icon(
+                    imageVector = when (installState) {
+                        AppInstallState.OPEN -> Icons.Default.OpenInNew
+                        AppInstallState.UPDATE -> Icons.Default.Update
+                        AppInstallState.GET -> Icons.Default.Download
+                    },
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Download APK (${app.sizeDisplay})",
+                    text = when (installState) {
+                        AppInstallState.OPEN -> "Open Installed App"
+                        AppInstallState.UPDATE -> "Update APK (${app.sizeDisplay})"
+                        AppInstallState.GET -> "Download APK (${app.sizeDisplay})"
+                    },
                     style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                 )
             }
         }
+    }
+
+    // Fullscreen Zoomable HorizontalPager Lightbox
+    if (lightboxInitialIndex != null) {
+        ScreenshotLightboxDialog(
+            screenshots = screenshots,
+            initialIndex = lightboxInitialIndex!!,
+            onDismiss = { lightboxInitialIndex = null }
+        )
+    }
+}
+
+/**
+ * Fullscreen Zoomable HorizontalPager Screenshot Lightbox Viewer
+ */
+@Composable
+fun ScreenshotLightboxDialog(
+    screenshots: List<String>,
+    initialIndex: Int,
+    onDismiss: () -> Unit
+) {
+    val pagerState = rememberPagerState(
+        initialPage = initialIndex.coerceIn(0, (screenshots.size - 1).coerceAtLeast(0)),
+        pageCount = { screenshots.size }
+    )
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = true,
+            dismissOnClickOutside = false
+        )
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.96f))
+        ) {
+            // Horizontal Pager
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                var scale by remember { mutableFloatStateOf(1f) }
+                var offset by remember { mutableStateOf(Offset.Zero) }
+
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .pointerInput(Unit) {
+                            detectTransformGestures { _, pan, zoom, _ ->
+                                scale = (scale * zoom).coerceIn(1f, 3.5f)
+                                if (scale > 1f) {
+                                    val maxOffset = 500f * (scale - 1f)
+                                    offset = Offset(
+                                        x = (offset.x + pan.x).coerceIn(-maxOffset, maxOffset),
+                                        y = (offset.y + pan.y).coerceIn(-maxOffset, maxOffset)
+                                    )
+                                } else {
+                                    offset = Offset.Zero
+                                }
+                            }
+                        }
+                        .pointerInput(Unit) {
+                            detectTapGestures(
+                                onDoubleTap = {
+                                    if (scale > 1f) {
+                                        scale = 1f
+                                        offset = Offset.Zero
+                                    } else {
+                                        scale = 2f
+                                    }
+                                }
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    AsyncImage(
+                        model = screenshots[page],
+                        contentDescription = "Zoomable screenshot ${page + 1}",
+                        modifier = Modifier
+                            .fillMaxSize(0.9f)
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                                translationX = offset.x
+                                translationY = offset.y
+                            },
+                        contentScale = ContentScale.Fit
+                    )
+                }
+            }
+
+            // Top Header: Counter & Close Button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 40.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = Color.Black.copy(alpha = 0.6f),
+                    shape = CircleShape
+                ) {
+                    Text(
+                        text = "${pagerState.currentPage + 1} of ${screenshots.size}",
+                        color = Color.White,
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 13.sp
+                        ),
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
+                    )
+                }
+
+                IconButton(
+                    onClick = onDismiss,
+                    modifier = Modifier
+                        .clip(CircleShape)
+                        .background(Color.White.copy(alpha = 0.2f))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close Lightbox",
+                        tint = Color.White
+                    )
+                }
+            }
+
+            // Bottom hint
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 36.dp)
+            ) {
+                Text(
+                    text = "Pinch to zoom • Double tap to reset",
+                    color = Color.White.copy(alpha = 0.6f),
+                    style = MaterialTheme.typography.bodySmall.copy(fontSize = 12.sp)
+                )
+            }
+        }
+    }
+}
+
+private fun getSampleScreenshotsForApp(app: ModApp): List<String> {
+    return when (app.category.lowercase()) {
+        "games" -> listOf(
+            "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1550745165-9bc0b252726f?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1511512578047-dfb367046420?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1538481199705-c710c4e965fc?w=800&auto=format&fit=crop&q=80"
+        )
+        "tools" -> listOf(
+            "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1526374965328-7f61d4dc18c5?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=800&auto=format&fit=crop&q=80"
+        )
+        "media" -> listOf(
+            "https://images.unsplash.com/photo-1518770660439-4636190af475?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=800&auto=format&fit=crop&q=80"
+        )
+        else -> listOf(
+            "https://images.unsplash.com/photo-1551288049-bebda4e38f71?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1563986768609-322da13575f3?w=800&auto=format&fit=crop&q=80",
+            "https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800&auto=format&fit=crop&q=80"
+        )
     }
 }

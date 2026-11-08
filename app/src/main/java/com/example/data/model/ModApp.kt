@@ -65,7 +65,9 @@ data class DownloadTask(
     val filePath: String? = null,
     val startedAt: Long = System.currentTimeMillis(),
     val completedAt: Long? = null,
-    val sha256: String = ""
+    val sha256: String = "",
+    val downloadUrl: String = "",
+    val packageName: String = ""
 )
 
 enum class NewsType {

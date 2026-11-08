@@ -13,4 +13,11 @@ interface HsStoreApiService {
         @Url url: String,
         @Header("Cache-Control") cacheControl: String = "no-cache"
     ): Response<ResponseBody>
+
+    @retrofit2.http.Streaming
+    @GET
+    suspend fun downloadFileStream(
+        @Url url: String,
+        @Header("Range") rangeHeader: String? = null
+    ): Response<ResponseBody>
 }

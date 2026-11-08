@@ -152,15 +152,39 @@ fun AppsScreen(
                 )
             }
 
-            items(filteredApps, key = { it.id }) { app ->
-                Box(modifier = Modifier.padding(vertical = 5.dp)) {
-                    ModAppCard(
-                        app = app,
-                        isBookmarked = bookmarkedIds.contains(app.id),
-                        onAppClick = { onAppSelected(app) },
-                        onDownloadClick = { onDownloadApp(app) },
-                        onBookmarkToggle = { onBookmarkToggle(app) }
-                    )
+            if (apps.isEmpty() && isRefreshing) {
+                items(5) {
+                    Box(modifier = Modifier.padding(vertical = 5.dp)) {
+                        com.example.ui.components.CupertinoModCardSkeleton()
+                    }
+                }
+            } else if (filteredApps.isEmpty()) {
+                item {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 40.dp),
+                        contentAlignment = androidx.compose.ui.Alignment.Center
+                    ) {
+                        Text(
+                            text = LocalizedStrings.get("search_no_results", currentLanguage),
+                            style = MaterialTheme.typography.bodyMedium.copy(
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        )
+                    }
+                }
+            } else {
+                items(filteredApps, key = { it.id }) { app ->
+                    Box(modifier = Modifier.padding(vertical = 5.dp)) {
+                        ModAppCard(
+                            app = app,
+                            isBookmarked = bookmarkedIds.contains(app.id),
+                            onAppClick = { onAppSelected(app) },
+                            onDownloadClick = { onDownloadApp(app) },
+                            onBookmarkToggle = { onBookmarkToggle(app) }
+                        )
+                    }
                 }
             }
         }

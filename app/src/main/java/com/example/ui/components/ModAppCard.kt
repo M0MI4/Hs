@@ -26,6 +26,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import com.example.util.AppInstallState
+import com.example.util.InstallStatusHelper
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,6 +53,10 @@ fun ModAppCard(
     onBookmarkToggle: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val installState = remember(app.packageName, app.versionCode) {
+        InstallStatusHelper.getAppInstallState(context, app.packageName, app.versionCode)
+    }
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
@@ -161,10 +169,17 @@ fun ModAppCard(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // GET Capsule Button
+                // Dynamic Action Capsule Button (GET, UPDATE, OPEN)
                 CupertinoGetButton(
-                    text = "GET",
-                    onClick = onDownloadClick
+                    text = installState.label,
+                    onClick = {
+                        if (installState == AppInstallState.OPEN) {
+                            val launched = InstallStatusHelper.launchInstalledApp(context, app.packageName)
+                            if (!launched) onDownloadClick()
+                        } else {
+                            onDownloadClick()
+                        }
+                    }
                 )
 
                 // Bookmark Icon

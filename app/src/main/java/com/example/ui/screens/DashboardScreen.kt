@@ -334,16 +334,24 @@ fun DashboardScreen(
             }
         }
 
-        // App rows
-        items(filteredApps, key = { it.id }) { app ->
-            Box(modifier = Modifier.padding(vertical = 5.dp)) {
-                ModAppCard(
-                    app = app,
-                    isBookmarked = bookmarkedIds.contains(app.id),
-                    onAppClick = { onAppSelected(app) },
-                    onDownloadClick = { onDownloadApp(app) },
-                    onBookmarkToggle = { onBookmarkToggle(app) }
-                )
+        // App rows or Shimmer Skeletons
+        if (apps.isEmpty() && isLoading) {
+            items(4) {
+                Box(modifier = Modifier.padding(vertical = 5.dp)) {
+                    com.example.ui.components.CupertinoModCardSkeleton()
+                }
+            }
+        } else {
+            items(filteredApps, key = { it.id }) { app ->
+                Box(modifier = Modifier.padding(vertical = 5.dp)) {
+                    ModAppCard(
+                        app = app,
+                        isBookmarked = bookmarkedIds.contains(app.id),
+                        onAppClick = { onAppSelected(app) },
+                        onDownloadClick = { onDownloadApp(app) },
+                        onBookmarkToggle = { onBookmarkToggle(app) }
+                    )
+                }
             }
         }
     }
