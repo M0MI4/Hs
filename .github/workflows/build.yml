@@ -7,7 +7,7 @@ jobs:
     - uses: actions/checkout@v4
     
     - name: Set up JDK 17
-      uses: actions/setup-java@v3
+      uses: actions/setup-java@v5
       with:
         java-version: '17'
         distribution: 'temurin'
@@ -17,10 +17,11 @@ jobs:
         
     - name: Create dummy google-services.json
       run: |
+        mkdir -p app
         echo '{"project_info":{"project_number":"1","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"com.f4illed.hsstore"}},"api_key":[{"current_key":"dummy"}]}]}' > app/google-services.json
         
     - name: Build APK
-      run: gradle assembleDebug
+      run: gradle assembleDebug --stacktrace
       
     - name: Upload APK
       uses: actions/upload-artifact@v4
