@@ -18,10 +18,10 @@ jobs:
     - name: Create dummy google-services.json
       run: |
         mkdir -p app
-        echo '{"project_info":{"project_number":"1","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"com.f4illed.hsstore"}},"api_key":[{"current_key":"dummy"}]}]}' > app/google-services.json
+        echo '{"project_info":{"project_number":"1","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"com.aistudio.hsstore.modapk"}},"api_key":[{"current_key":"dummy"}]}]}' > app/google-services.json
         
     - name: Build APK
-      run: gradle assembleDebug --stacktrace
+      run: gradle assembleDebug
       
     - name: Upload APK
       uses: actions/upload-artifact@v4
