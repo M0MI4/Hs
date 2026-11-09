@@ -72,6 +72,17 @@ fun AppsScreen(
         list
     }
 
+    val searchPlaceholder = remember(currentLanguage, localizedCategories, selectedCategoryIndex) {
+        val prefix = LocalizedStrings.get("apps_search_prefix", currentLanguage)
+        val cat = localizedCategories.getOrElse(selectedCategoryIndex) { "Apps" }
+        try { String.format(prefix, cat) } catch (e: Exception) { "Search in $cat..." }
+    }
+
+    val categoryHeader = remember(localizedCategories, selectedCategoryIndex, filteredApps.size) {
+        val cat = localizedCategories.getOrElse(selectedCategoryIndex) { "All" }.uppercase()
+        "$cat (${filteredApps.size})"
+    }
+
     CupertinoPullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
@@ -84,7 +95,7 @@ fun AppsScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp)
         ) {
             // iOS Large Title Header
-            item {
+            item(key = "header_title") {
                 Column(modifier = Modifier.padding(vertical = 12.dp)) {
                     Text(
                         text = LocalizedStrings.get("apps_kicker", currentLanguage),
@@ -122,10 +133,7 @@ fun AppsScreen(
                     CupertinoSearchField(
                         query = searchQuery,
                         onQueryChange = { searchQuery = it },
-                        placeholder = String.format(
-                            LocalizedStrings.get("apps_search_prefix", currentLanguage),
-                            localizedCategories[selectedCategoryIndex]
-                        )
+                        placeholder = searchPlaceholder
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))
@@ -139,9 +147,9 @@ fun AppsScreen(
                 }
             }
 
-            item {
+            item(key = "header_category_count") {
                 Text(
-                    text = "${localizedCategories[selectedCategoryIndex].uppercase()} (${filteredApps.size})",
+                    text = categoryHeader,
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Bold,
@@ -153,13 +161,17 @@ fun AppsScreen(
             }
 
             if (apps.isEmpty() && isRefreshing) {
-                items(5) {
+                items(
+                    count = 5,
+                    key = { "skeleton_$it" },
+                    contentType = { "skeleton" }
+                ) {
                     Box(modifier = Modifier.padding(vertical = 5.dp)) {
                         com.example.ui.components.CupertinoModCardSkeleton()
                     }
                 }
             } else if (filteredApps.isEmpty()) {
-                item {
+                item(key = "empty_search_state") {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()

@@ -66,8 +66,12 @@ fun DownloadsScreen(
     onInstall: (DownloadTask) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val activeTasks = tasks.filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.QUEUED }
-    val completedTasks = tasks.filter { it.status == DownloadStatus.COMPLETED || it.status == DownloadStatus.FAILED }
+    val activeTasks = androidx.compose.runtime.remember(tasks) {
+        tasks.filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.QUEUED }
+    }
+    val completedTasks = androidx.compose.runtime.remember(tasks) {
+        tasks.filter { it.status == DownloadStatus.COMPLETED || it.status == DownloadStatus.FAILED }
+    }
 
     CupertinoPullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -81,7 +85,7 @@ fun DownloadsScreen(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp)
         ) {
         // iOS Large Title Header
-        item {
+        item(key = "downloads_header") {
             Column(modifier = Modifier.padding(vertical = 12.dp)) {
                 Text(
                     text = LocalizedStrings.get("downloads_kicker", currentLanguage),
@@ -104,7 +108,7 @@ fun DownloadsScreen(
 
         // Active Downloads Group
         if (activeTasks.isNotEmpty()) {
-            item {
+            item(key = "active_downloads_group") {
                 Text(
                     text = "${LocalizedStrings.get("downloads_active_queue", currentLanguage)} (${activeTasks.size})",
                     style = MaterialTheme.typography.labelSmall.copy(
@@ -133,7 +137,7 @@ fun DownloadsScreen(
         }
 
         // Downloaded Packages Group
-        item {
+        item(key = "completed_downloads_group") {
             Text(
                 text = "${LocalizedStrings.get("downloads_completed", currentLanguage)} (${completedTasks.size})",
                 style = MaterialTheme.typography.labelSmall.copy(

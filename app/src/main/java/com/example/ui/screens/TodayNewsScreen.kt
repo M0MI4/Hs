@@ -142,8 +142,6 @@ fun TodayNewsScreen(
         }
     }
 
-    val breakingNews = newsList.firstOrNull { it.isBreaking }
-
     CupertinoPullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefreshNews,
@@ -155,8 +153,8 @@ fun TodayNewsScreen(
                 .testTag("today_news_screen"),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp)
         ) {
-            // 1. iOS Today Header: Date Kicker + Large Title + Particle Toggle (Pastebin Live badge removed)
-            item {
+            // 1. iOS Today Header: Date Kicker + Large Title + Particle Toggle
+            item(key = "today_header") {
                 Column(modifier = Modifier.padding(top = 10.dp, bottom = 12.dp)) {
                     Text(
                         text = todayFormatted,
@@ -216,10 +214,8 @@ fun TodayNewsScreen(
                 }
             }
 
-
-
-            // 3. Search Field & Segmented Control
-            item {
+            // 2. Search Field & Segmented Control
+            item(key = "today_controls") {
                 CupertinoSearchField(
                     query = searchQuery,
                     onQueryChange = { searchQuery = it },
@@ -235,9 +231,9 @@ fun TodayNewsScreen(
                 )
             }
 
-            // 4. News Items: Banner News & Just Text News
+            // 3. News Items: Banner News & Just Text News
             if (filteredNews.isEmpty()) {
-                item {
+                item(key = "today_empty") {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surface,
@@ -271,7 +267,11 @@ fun TodayNewsScreen(
                     }
                 }
             } else {
-                items(filteredNews, key = { it.id }) { newsItem ->
+                items(
+                    items = filteredNews,
+                    key = { it.id },
+                    contentType = { it.type.name }
+                ) { newsItem ->
                     Box(modifier = Modifier.padding(bottom = 16.dp)) {
                         when (newsItem.type) {
                             NewsType.BANNER -> {

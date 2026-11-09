@@ -57,14 +57,27 @@ fun ModAppCard(
     val installState = remember(app.packageName, app.versionCode) {
         InstallStatusHelper.getAppInstallState(context, app.packageName, app.versionCode)
     }
+
+    val bylineText = remember(app.author, app.category) {
+        "${app.author} • ${app.category}"
+    }
+
+    val ratingText = remember(app.rating) {
+        "%.1f".format(app.rating)
+    }
+
+    val modFeaturesText = remember(app.modFeatures) {
+        if (app.modFeatures.isNotEmpty()) "⚡ " + app.modFeatures.joinToString(" • ") else ""
+    }
+
     Surface(
         shape = RoundedCornerShape(16.dp),
         color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(
             0.5.dp,
-            MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
+            MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
         ),
-        shadowElevation = 1.5.dp,
+        shadowElevation = 0.5.dp,
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
@@ -130,7 +143,7 @@ fun ModAppCard(
                     Spacer(modifier = Modifier.height(2.dp))
 
                     Text(
-                        text = "${app.author} • ${app.category}",
+                        text = bylineText,
                         style = MaterialTheme.typography.bodySmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp
@@ -150,7 +163,7 @@ fun ModAppCard(
                         )
                         Spacer(modifier = Modifier.width(2.dp))
                         Text(
-                            text = "%.1f".format(app.rating),
+                            text = ratingText,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
                                 fontSize = 11.sp
@@ -198,7 +211,7 @@ fun ModAppCard(
                 }
             }
 
-            if (app.modFeatures.isNotEmpty()) {
+            if (modFeaturesText.isNotBlank()) {
                 Spacer(modifier = Modifier.height(10.dp))
                 Divider(
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
@@ -207,7 +220,7 @@ fun ModAppCard(
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
-                    text = "⚡ " + app.modFeatures.joinToString(" • "),
+                    text = modFeaturesText,
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = MaterialTheme.colorScheme.primary,
                         fontSize = 11.sp,

@@ -106,7 +106,9 @@ fun DashboardScreen(
         }
     }
 
-    val featuredApp = apps.find { it.id == "app_retro_emu" } ?: apps.firstOrNull()
+    val featuredApp = remember(apps) {
+        apps.find { it.id == "app_retro_emu" } ?: apps.firstOrNull()
+    }
 
     LazyColumn(
         modifier = modifier
@@ -115,7 +117,7 @@ fun DashboardScreen(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp)
     ) {
         // iOS Today Header (Date kicker + Large Title)
-        item {
+        item(key = "dashboard_header") {
             Column(modifier = Modifier.padding(top = 10.dp, bottom = 12.dp)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -223,7 +225,7 @@ fun DashboardScreen(
 
         // iOS Hero Card (Featured Today)
         if (featuredApp != null && searchQuery.isEmpty()) {
-            item {
+            item(key = "featured_${featuredApp.id}") {
                 Surface(
                     shape = RoundedCornerShape(22.dp),
                     color = MaterialTheme.colorScheme.surface,
@@ -303,7 +305,7 @@ fun DashboardScreen(
         }
 
         // Section Title: Apps List
-        item {
+        item(key = "popular_mods_header") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -336,13 +338,21 @@ fun DashboardScreen(
 
         // App rows or Shimmer Skeletons
         if (apps.isEmpty() && isLoading) {
-            items(4) {
+            items(
+                count = 4,
+                key = { "dashboard_skeleton_$it" },
+                contentType = { "skeleton" }
+            ) {
                 Box(modifier = Modifier.padding(vertical = 5.dp)) {
                     com.example.ui.components.CupertinoModCardSkeleton()
                 }
             }
         } else {
-            items(filteredApps, key = { it.id }) { app ->
+            items(
+                items = filteredApps,
+                key = { it.id },
+                contentType = { "mod_app_card" }
+            ) { app ->
                 Box(modifier = Modifier.padding(vertical = 5.dp)) {
                     ModAppCard(
                         app = app,
