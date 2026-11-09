@@ -59,6 +59,8 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     val bookmarkedAppIds: StateFlow<Set<String>> = _bookmarkedAppIds.asStateFlow()
 
     init {
+        // Preload installed applications into memory cache to eliminate scroll lag
+        com.example.util.InstallStatusHelper.preloadInstalledPackages(application.applicationContext)
         // Startup auto sync for catalog, news, and updates
         refreshAll()
     }

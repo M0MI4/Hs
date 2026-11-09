@@ -175,7 +175,11 @@ fun AppsScreen(
                     }
                 }
             } else {
-                items(filteredApps, key = { it.id }) { app ->
+                items(
+                    items = filteredApps,
+                    key = { it.id },
+                    contentType = { "mod_app_card" }
+                ) { app ->
                     Box(modifier = Modifier.padding(vertical = 5.dp)) {
                         ModAppCard(
                             app = app,
