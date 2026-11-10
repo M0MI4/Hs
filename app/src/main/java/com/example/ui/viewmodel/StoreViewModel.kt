@@ -12,7 +12,6 @@ import com.example.data.repository.CatalogSource
 import com.example.data.repository.FirestoreSyncRepository
 import com.example.data.repository.NewsRepository
 import com.example.data.repository.NewsSource
-import com.example.data.repository.RemoteStoreService
 import com.example.data.repository.RemoteSyncResult
 import com.example.data.repository.UpdateRepository
 import com.google.firebase.auth.FirebaseUser
@@ -23,9 +22,8 @@ import kotlinx.coroutines.launch
 
 class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val remoteStoreService = RemoteStoreService(application.applicationContext)
-    val catalogRepo = CatalogRepository(application.applicationContext, remoteStoreService)
-    val updateRepo = UpdateRepository(application.applicationContext, remoteStoreService)
+    val catalogRepo = CatalogRepository(application.applicationContext)
+    val updateRepo = UpdateRepository(application.applicationContext)
     val newsRepo = NewsRepository(application.applicationContext)
     val firestoreRepo = FirestoreSyncRepository(application.applicationContext)
 

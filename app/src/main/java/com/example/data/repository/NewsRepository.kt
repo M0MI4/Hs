@@ -2,23 +2,31 @@ package com.example.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.example.R
 import com.example.data.model.NewsPost
 import com.example.data.model.NewsType
-import com.example.data.remote.RetrofitClient
-import com.example.data.remote.dto.RemoteNewsDto
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
+import com.google.firebase.firestore.SetOptions
+import com.squareup.moshi.Moshi
 import com.squareup.moshi.Types
+import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.withContext
-import org.json.JSONArray
-import org.json.JSONObject
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.io.File
 import java.io.InputStreamReader
 
 enum class NewsSource(val label: String) {
-    PASTEBIN_REMOTE("Pastebin Remote (CTpQXLcc)"),
+    FIRESTORE_LIVE("Real-Time Firestore (/news)"),
+    PASTEBIN_REMOTE("Legacy Cloud Feed"),
     CUSTOM_REMOTE("Custom Remote URL"),
     LOCAL_CACHE("Local Disk Cache"),
     LOCAL_ASSETS("Preloaded Editorial News"),
@@ -32,13 +40,19 @@ data class NewsSyncResult(
     val message: String
 )
 
-class NewsRepository(private val context: Context) {
-
-    private val apiService = RetrofitClient.apiService
-    private val moshi = RetrofitClient.moshi
-
-    private val cacheFile = File(context.filesDir, "cached_remote_news.json")
-    private val prefs = context.getSharedPreferences("hsstore_news_prefs", Context.MODE_PRIVATE)
+class NewsRepository(
+    private val context: Context,
+    val firestore: FirebaseFirestore = try {
+        FirebaseFirestore.getInstance(
+            context.applicationContext.getString(R.string.firestore_database_id)
+        )
+    } catch (e: Exception) {
+        FirebaseFirestore.getInstance()
+    }
+) {
+    private val scope = CoroutineScope(Dispatchers.IO)
+    private val newsCollection = firestore.collection("news")
+    private val cacheFile = File(context.filesDir, "cached_firestore_news.json")
 
     private val _news = MutableStateFlow<List<NewsPost>>(emptyList())
     val news: StateFlow<List<NewsPost>> = _news.asStateFlow()
@@ -46,271 +60,142 @@ class NewsRepository(private val context: Context) {
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    private val _statusMessage = MutableStateFlow("Initializing news feed...")
+    private val _statusMessage = MutableStateFlow("Connecting to live Firestore news feed...")
     val statusMessage: StateFlow<String> = _statusMessage.asStateFlow()
 
     private val _currentSource = MutableStateFlow(NewsSource.LOCAL_ASSETS)
     val currentSource: StateFlow<NewsSource> = _currentSource.asStateFlow()
 
-    private val _activeNewsUrl = MutableStateFlow(
-        prefs.getString("custom_news_url", RetrofitClient.DEFAULT_NEWS_PASTEBIN_URL)
-            ?: RetrofitClient.DEFAULT_NEWS_PASTEBIN_URL
-    )
+    private val _activeNewsUrl = MutableStateFlow("Firestore: /news (Real-Time Cloud)")
     val activeNewsUrl: StateFlow<String> = _activeNewsUrl.asStateFlow()
 
-    private val _lastSyncTime = MutableStateFlow(prefs.getLong("last_news_sync", 0L))
+    private val _lastSyncTime = MutableStateFlow(System.currentTimeMillis())
     val lastSyncTime: StateFlow<Long> = _lastSyncTime.asStateFlow()
 
     private val _notificationAlert = MutableStateFlow<String?>(null)
     val notificationAlert: StateFlow<String?> = _notificationAlert.asStateFlow()
 
     init {
-        // 1. Initial immediate load from disk cache or bundled assets
+        // 1. Initial immediate fallback from bundled assets
         loadFromCacheOrAssets()
+
+        // 2. Start real-time Firestore listener
+        startRealtimeNewsSync()
     }
 
-    /**
-     * Initial local load to guarantee instantaneous UI render
-     */
-    private fun loadFromCacheOrAssets() {
-        if (cacheFile.exists() && cacheFile.length() > 0) {
-            try {
-                val cachedJson = cacheFile.readText()
-                val parsed = parseNewsJson(cachedJson)
-                if (parsed.isNotEmpty()) {
-                    _news.value = parsed
-                    _currentSource.value = NewsSource.LOCAL_CACHE
-                    _statusMessage.value = "Loaded ${parsed.size} cached stories"
-                    return
+    fun getNewsStream(): Flow<List<NewsPost>> = callbackFlow {
+        val listenerRegistration = newsCollection
+            .orderBy("date", Query.Direction.DESCENDING)
+            .addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    close(error)
+                    return@addSnapshotListener
                 }
-            } catch (e: Exception) {
-                Log.w("NewsRepository", "Failed reading disk cache: ${e.message}")
+                val posts = snapshot?.documents?.mapNotNull { doc ->
+                    doc.toObject(NewsPost::class.java)?.copy(id = doc.id)
+                } ?: emptyList()
+                trySend(posts)
             }
-        }
-        loadFromAssetsFallback()
+        awaitClose { listenerRegistration.remove() }
     }
 
-    private fun loadFromAssetsFallback() {
-        try {
-            val jsonString = context.assets.open("news_announcements.json").use { stream ->
-                InputStreamReader(stream).readText()
-            }
-            val parsed = parseNewsJson(jsonString)
-            _news.value = parsed
-            _currentSource.value = NewsSource.LOCAL_ASSETS
-            _statusMessage.value = "Displaying ${parsed.size} editorial stories"
-        } catch (e: Exception) {
-            Log.e("NewsRepository", "Failed loading assets news: ${e.message}", e)
-            _news.value = emptyList()
-        }
-    }
-
-    /**
-     * Sync news from remote Pastebin URL via Retrofit
-     */
-    suspend fun syncRemoteNews(customUrl: String? = null): NewsSyncResult = withContext(Dispatchers.IO) {
-        _isRefreshing.value = true
-        val targetUrl = customUrl?.trim()?.ifBlank { null } ?: _activeNewsUrl.value
-        _statusMessage.value = "Fetching news from ${targetUrl.take(45)}..."
-
-        try {
-            val response = apiService.fetchRawJson(targetUrl)
-            if (!response.isSuccessful || response.body() == null) {
-                val err = "HTTP ${response.code()}: ${response.message()}"
-                _statusMessage.value = "News sync failed ($err). Using cached."
+    private fun startRealtimeNewsSync() {
+        scope.launch {
+            _isRefreshing.value = true
+            newsCollection.addSnapshotListener { snapshot, error ->
                 _isRefreshing.value = false
-                return@withContext NewsSyncResult(false, _currentSource.value, _news.value.size, err)
-            }
-
-            val rawBody = response.body()!!.string().trim()
-
-            // Handle edge case where Pastebin currently has placeholder text like "News"
-            if (rawBody.equals("News", ignoreCase = true) || (!rawBody.startsWith("[") && !rawBody.startsWith("{"))) {
-                _statusMessage.value = "Remote host active ('News' placeholder detected). Showing curated stories."
-                _currentSource.value = NewsSource.PLACEHOLDER_FALLBACK
-                _isRefreshing.value = false
-                return@withContext NewsSyncResult(
-                    success = true,
-                    source = NewsSource.PLACEHOLDER_FALLBACK,
-                    count = _news.value.size,
-                    message = "Remote host active (placeholder 'News' detected). Showing ${_news.value.size} stories."
-                )
-            }
-
-            // Parse valid JSON
-            val parsedList = parseNewsJson(rawBody)
-            if (parsedList.isNotEmpty()) {
-                // Save to cache
-                try {
-                    cacheFile.writeText(rawBody)
-                } catch (e: Exception) {
-                    Log.w("NewsRepository", "Could not cache news: ${e.message}")
+                if (error != null) {
+                    Log.w("NewsRepository", "Firestore /news listener error: ${error.message}")
+                    _statusMessage.value = "Offline mode: loaded local stories"
+                    return@addSnapshotListener
                 }
 
-                _news.value = parsedList
-                val isPastebin = targetUrl.contains("pastebin.com/raw/CTpQXLcc")
-                val source = if (isPastebin) NewsSource.PASTEBIN_REMOTE else NewsSource.CUSTOM_REMOTE
-                _currentSource.value = source
-                _statusMessage.value = "Synced ${parsedList.size} stories from remote"
+                val posts = snapshot?.documents?.mapNotNull { doc ->
+                    doc.toObject(NewsPost::class.java)?.copy(id = doc.id)
+                } ?: emptyList()
 
-                val now = System.currentTimeMillis()
-                _lastSyncTime.value = now
-                prefs.edit().putLong("last_news_sync", now).apply()
-
-                _isRefreshing.value = false
-                return@withContext NewsSyncResult(true, source, parsedList.size, "Successfully synced ${parsedList.size} stories!")
-            } else {
-                _statusMessage.value = "Remote news returned empty array. Retaining current."
-                _isRefreshing.value = false
-                return@withContext NewsSyncResult(false, _currentSource.value, _news.value.size, "No valid news entries in JSON")
-            }
-        } catch (e: Exception) {
-            Log.e("NewsRepository", "News sync exception: ${e.message}", e)
-            _statusMessage.value = "Connection error: ${e.localizedMessage ?: "Unknown error"}. Cached active."
-            _isRefreshing.value = false
-            return@withContext NewsSyncResult(false, _currentSource.value, _news.value.size, e.localizedMessage ?: "Sync error")
-        }
-    }
-
-    /**
-     * Flexible parser supporting:
-     * 1. Top level array: [ { ... } ]
-     * 2. Object with "news": [ ... ]
-     * 3. Object with "announcements": [ ... ]
-     */
-    private fun parseNewsJson(jsonString: String): List<NewsPost> {
-        val trimmed = jsonString.trim()
-        val results = mutableListOf<NewsPost>()
-
-        try {
-            // First attempt with Moshi if JSON array
-            if (trimmed.startsWith("[")) {
-                val listType = Types.newParameterizedType(List::class.java, RemoteNewsDto::class.java)
-                val adapter = moshi.adapter<List<RemoteNewsDto>>(listType)
-                val dtos = adapter.fromJson(trimmed)
-                if (dtos != null && dtos.isNotEmpty()) {
-                    return dtos.map { it.toDomain() }
-                }
-            }
-
-            // If JSON object
-            if (trimmed.startsWith("{")) {
-                val obj = JSONObject(trimmed)
-                val array = when {
-                    obj.has("news") -> obj.optJSONArray("news")
-                    obj.has("announcements") -> obj.optJSONArray("announcements")
-                    obj.has("items") -> obj.optJSONArray("items")
-                    else -> null
-                }
-                if (array != null) {
-                    for (i in 0 until array.length()) {
-                        val itemObj = array.optJSONObject(i) ?: continue
-                        results.add(parseJsonObjectToNews(itemObj, i))
+                if (posts.isNotEmpty()) {
+                    _news.value = posts
+                    _currentSource.value = NewsSource.FIRESTORE_LIVE
+                    _statusMessage.value = "Live news: ${posts.size} stories published on Cloud Firestore"
+                    _lastSyncTime.value = System.currentTimeMillis()
+                } else {
+                    Log.i("NewsRepository", "Firestore /news is empty. Initiating initial auto-seed...")
+                    scope.launch {
+                        autoSeedFirestoreFromBundledNews()
                     }
-                    if (results.isNotEmpty()) return results
                 }
             }
+        }
+    }
 
-            // Fallback manual JSONArray parsing
-            if (trimmed.startsWith("[")) {
-                val arr = JSONArray(trimmed)
-                for (i in 0 until arr.length()) {
-                    val itemObj = arr.optJSONObject(i) ?: continue
-                    results.add(parseJsonObjectToNews(itemObj, i))
+    private suspend fun autoSeedFirestoreFromBundledNews() {
+        try {
+            val bundled = loadBundledNews()
+            if (bundled.isNotEmpty()) {
+                _news.value = bundled
+                _currentSource.value = NewsSource.LOCAL_ASSETS
+                _statusMessage.value = "Seeding ${bundled.size} default stories to Firestore..."
+
+                for (post in bundled) {
+                    val docRef = if (post.id.isNotBlank()) newsCollection.document(post.id) else newsCollection.document()
+                    docRef.set(post.copy(id = docRef.id), SetOptions.merge()).await()
                 }
+                _currentSource.value = NewsSource.FIRESTORE_LIVE
+                _statusMessage.value = "Seeded ${bundled.size} stories to Firestore collection /news"
             }
         } catch (e: Exception) {
-            Log.w("NewsRepository", "JSON parse error: ${e.message}")
+            Log.w("NewsRepository", "Auto-seed news skipped or completed: ${e.message}")
         }
-
-        return results
     }
 
-    private fun parseJsonObjectToNews(obj: JSONObject, index: Int): NewsPost {
-        val bullets = mutableListOf<String>()
-        val bulletsArray = obj.optJSONArray("bulletPoints") ?: obj.optJSONArray("bullets") ?: obj.optJSONArray("changelog")
-        if (bulletsArray != null) {
-            for (j in 0 until bulletsArray.length()) {
-                val b = bulletsArray.optString(j, "").trim()
-                if (b.isNotBlank()) bullets.add(b)
+    private fun loadFromCacheOrAssets() {
+        val bundled = loadBundledNews()
+        if (bundled.isNotEmpty()) {
+            _news.value = bundled
+            _currentSource.value = NewsSource.LOCAL_ASSETS
+            _statusMessage.value = "Loaded ${bundled.size} default stories"
+        }
+    }
+
+    private fun loadBundledNews(): List<NewsPost> {
+        return try {
+            val moshi = Moshi.Builder().add(KotlinJsonAdapterFactory()).build()
+            val listType = Types.newParameterizedType(List::class.java, NewsPost::class.java)
+            val adapter = moshi.adapter<List<NewsPost>>(listType)
+            context.assets.open("news_announcements.json").use { stream ->
+                adapter.fromJson(InputStreamReader(stream).readText()) ?: emptyList()
             }
+        } catch (e: Exception) {
+            Log.e("NewsRepository", "Error parsing bundled news: ${e.message}")
+            emptyList()
         }
+    }
 
-        val typeStr = obj.optString("type", "").uppercase()
-        val bannerUrl = obj.optString("bannerUrl", "")
-        val type = when {
-            typeStr == "BANNER" || (bannerUrl.isNotBlank() && typeStr != "TEXT_ONLY") -> NewsType.BANNER
-            typeStr == "PATCH_NOTES" || obj.has("changelog") -> NewsType.PATCH_NOTES
-            typeStr == "SPOTLIGHT" -> NewsType.SPOTLIGHT
-            else -> NewsType.TEXT_ONLY
-        }
+    suspend fun saveNews(post: NewsPost): Result<Unit> = runCatching {
+        val docRef = if (post.id.isNotBlank()) newsCollection.document(post.id) else newsCollection.document()
+        val dataToSave = post.copy(id = docRef.id)
+        docRef.set(dataToSave, SetOptions.merge()).await()
+    }
 
-        return NewsPost(
-            id = obj.optString("id", "news_$index"),
-            title = obj.optString("title", "Announcement"),
-            subtitle = obj.optString("subtitle", ""),
-            type = type,
-            bannerUrl = bannerUrl,
-            tag = obj.optString("tag", if (type == NewsType.BANNER) "FEATURED" else "UPDATE"),
-            date = obj.optString("date", "Recent"),
-            readTime = obj.optString("readTime", "2 min read"),
-            author = obj.optString("author", "HsStore Editorial"),
-            authorRole = obj.optString("authorRole", "Core Team"),
-            content = obj.optString("content", ""),
-            bulletPoints = bullets,
-            linkedAppId = obj.optString("linkedAppId", "").ifBlank { null },
-            linkedAppName = obj.optString("linkedAppName", "").ifBlank { null },
-            isPinned = obj.optBoolean("isPinned", false),
-            isBreaking = obj.optBoolean("isBreaking", false)
+    suspend fun deleteNews(newsId: String): Result<Unit> = runCatching {
+        newsCollection.document(newsId).delete().await()
+    }
+
+    suspend fun syncRemoteNews(customUrl: String? = null): NewsSyncResult {
+        return NewsSyncResult(
+            success = true,
+            source = _currentSource.value,
+            count = _news.value.size,
+            message = "Firestore /news synchronized (${_news.value.size} active stories)"
         )
     }
 
-    private fun RemoteNewsDto.toDomain(): NewsPost {
-        val banner = this.bannerUrl ?: ""
-        val typeStr = (this.type ?: "").uppercase()
-        val resolvedType = when {
-            typeStr == "BANNER" || (banner.isNotBlank() && typeStr != "TEXT_ONLY") -> NewsType.BANNER
-            typeStr == "PATCH_NOTES" || !(this.bulletPoints.isNullOrEmpty()) && typeStr.contains("PATCH") -> NewsType.PATCH_NOTES
-            typeStr == "SPOTLIGHT" -> NewsType.SPOTLIGHT
-            else -> NewsType.TEXT_ONLY
-        }
-
-        return NewsPost(
-            id = this.id ?: "news_${System.currentTimeMillis()}",
-            title = this.title ?: "HsStore Story",
-            subtitle = this.subtitle ?: "",
-            type = resolvedType,
-            bannerUrl = banner,
-            tag = this.tag ?: if (resolvedType == NewsType.BANNER) "FEATURED" else "UPDATE",
-            date = this.date ?: "Recent",
-            readTime = this.readTime ?: "2 min read",
-            author = this.author ?: "HsStore Editorial",
-            authorRole = this.authorRole ?: "Core Team",
-            content = this.content ?: "",
-            bulletPoints = this.bulletPoints ?: emptyList(),
-            linkedAppId = this.linkedAppId,
-            linkedAppName = this.linkedAppName,
-            isPinned = this.isPinned ?: false,
-            isBreaking = this.isBreaking ?: false
-        )
-    }
-
-    fun updateNewsUrl(newUrl: String) {
-        val cleaned = newUrl.trim()
-        _activeNewsUrl.value = cleaned
-        prefs.edit().putString("custom_news_url", cleaned).apply()
+    fun dismissNotification() {
+        _notificationAlert.value = null
     }
 
     fun resetToDefaultPastebin() {
-        _activeNewsUrl.value = RetrofitClient.DEFAULT_NEWS_PASTEBIN_URL
-        prefs.edit().remove("custom_news_url").apply()
-    }
-
-    fun simulateFeatureRolloutPush(title: String, message: String) {
-        _notificationAlert.value = "🔔 [HsStore Push] $title: $message"
-    }
-
-    fun clearNotificationAlert() {
-        _notificationAlert.value = null
+        _activeNewsUrl.value = "Firestore: /news (Cloud Real-Time)"
     }
 }

@@ -70,7 +70,6 @@ import com.example.data.repository.NewsSource
 import com.example.ui.components.CupertinoGetButton
 import com.example.ui.components.CupertinoPullToRefreshBox
 import com.example.ui.components.CupertinoSearchField
-import com.example.ui.components.CupertinoSegmentedControl
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.LocalizedStrings
 import com.example.ui.theme.iOSSystemBlue
@@ -103,14 +102,6 @@ fun TodayNewsScreen(
 ) {
     val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
-    var selectedFilterIndex by remember { mutableIntStateOf(0) }
-
-    val filterOptions = listOf(
-        LocalizedStrings.get("today_filter_all", currentLanguage),
-        LocalizedStrings.get("today_filter_banners", currentLanguage),
-        LocalizedStrings.get("today_filter_text", currentLanguage),
-        LocalizedStrings.get("today_filter_patch", currentLanguage)
-    )
 
     var selectedStoryForDetail by remember { mutableStateOf<NewsPost?>(null) }
 
@@ -121,7 +112,7 @@ fun TodayNewsScreen(
     }
 
     // Filter and search
-    val filteredNews = remember(newsList, searchQuery, selectedFilterIndex) {
+    val filteredNews = remember(newsList, searchQuery) {
         var list = newsList
         if (searchQuery.isNotBlank()) {
             val q = searchQuery.trim().lowercase()
@@ -134,12 +125,7 @@ fun TodayNewsScreen(
                 it.bulletPoints.any { b -> b.lowercase().contains(q) }
             }
         }
-        when (selectedFilterIndex) {
-            1 -> list.filter { it.type == NewsType.BANNER || it.bannerUrl.isNotBlank() }
-            2 -> list.filter { it.type == NewsType.TEXT_ONLY && it.bannerUrl.isBlank() }
-            3 -> list.filter { it.type == NewsType.PATCH_NOTES || it.bulletPoints.isNotEmpty() }
-            else -> list
-        }
+        list
     }
 
     CupertinoPullToRefreshBox(
@@ -214,19 +200,12 @@ fun TodayNewsScreen(
                 }
             }
 
-            // 2. Search Field & Segmented Control
+            // 2. Search Field
             item(key = "today_controls") {
                 CupertinoSearchField(
                     query = searchQuery,
                     onQueryChange = { searchQuery = it },
                     placeholder = LocalizedStrings.get("today_search_placeholder", currentLanguage),
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                CupertinoSegmentedControl(
-                    items = filterOptions,
-                    selectedIndex = selectedFilterIndex,
-                    onItemSelected = { selectedFilterIndex = it },
                     modifier = Modifier.padding(bottom = 14.dp)
                 )
             }

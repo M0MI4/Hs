@@ -1,38 +1,83 @@
 {
   "entities": {
+    "ModApp": {
+      "title": "ModApp",
+      "description": "Store application package and mod metadata.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "packageName": { "type": "string" },
+        "category": { "type": "string" },
+        "version": { "type": "string" },
+        "versionCode": { "type": "integer" },
+        "sizeBytes": { "type": "integer" },
+        "sizeDisplay": { "type": "string" },
+        "iconUrl": { "type": "string" },
+        "downloadUrl": { "type": "string" },
+        "sha256": { "type": "string" },
+        "description": { "type": "string" },
+        "modFeatures": { "type": "array" },
+        "changelog": { "type": "string" },
+        "rating": { "type": "number" },
+        "downloadsCount": { "type": "integer" },
+        "isVerified": { "type": "boolean" },
+        "author": { "type": "string" },
+        "updatedDate": { "type": "string" },
+        "permissionsRequired": { "type": "array" }
+      },
+      "required": ["name", "packageName", "category", "version", "downloadUrl"]
+    },
+    "NewsPost": {
+      "title": "NewsPost",
+      "description": "Editorial story or breaking update announcement.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "subtitle": { "type": "string" },
+        "type": { "type": "string" },
+        "bannerUrl": { "type": "string" },
+        "tag": { "type": "string" },
+        "date": { "type": "string" },
+        "readTime": { "type": "string" },
+        "author": { "type": "string" },
+        "authorRole": { "type": "string" },
+        "content": { "type": "string" },
+        "bulletPoints": { "type": "array" },
+        "linkedAppId": { "type": "string" },
+        "linkedAppName": { "type": "string" },
+        "isPinned": { "type": "boolean" },
+        "isBreaking": { "type": "boolean" }
+      },
+      "required": ["title", "content"]
+    },
+    "StoreConfig": {
+      "title": "StoreConfig",
+      "description": "Global store version and remote force update configuration.",
+      "type": "object",
+      "properties": {
+        "storeLatestVersion": { "type": "string" },
+        "storeLatestVersionCode": { "type": "integer" },
+        "currentVersionCode": { "type": "integer" },
+        "mandatory": { "type": "boolean" },
+        "title": { "type": "string" },
+        "announcementMessage": { "type": "string" },
+        "downloadUrl": { "type": "string" },
+        "showDialog": { "type": "boolean" }
+      },
+      "required": ["storeLatestVersion", "storeLatestVersionCode"]
+    },
     "DeviceConfig": {
       "title": "DeviceConfig",
       "description": "Synced configuration and installed mod list for remote device management.",
       "type": "object",
       "properties": {
-        "userId": {
-          "type": "string",
-          "description": "Unique identifier of the authenticated user."
-        },
-        "deviceId": {
-          "type": "string",
-          "description": "Unique identifier of the mobile device."
-        },
-        "deviceName": {
-          "type": "string",
-          "description": "Human-readable device model name."
-        },
-        "installedApps": {
-          "type": "array",
-          "description": "List of installed modded app IDs."
-        },
-        "customConfigJson": {
-          "type": "string",
-          "description": "Serialized JSON string containing remote settings."
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "userId": { "type": "string" },
+        "deviceId": { "type": "string" },
+        "deviceName": { "type": "string" },
+        "installedApps": { "type": "array" },
+        "customConfigJson": { "type": "string" }
       },
       "required": ["userId", "deviceId", "deviceName", "customConfigJson"]
     },
@@ -41,34 +86,11 @@
       "description": "Record of an app download or installation associated with a user account.",
       "type": "object",
       "properties": {
-        "userId": {
-          "type": "string",
-          "description": "User ID owning the download history item."
-        },
-        "appId": {
-          "type": "string",
-          "description": "ID of the modded app."
-        },
-        "appName": {
-          "type": "string",
-          "description": "Title of the modded app."
-        },
-        "version": {
-          "type": "string",
-          "description": "App version string."
-        },
-        "status": {
-          "type": "string",
-          "description": "Current status: COMPLETED, QUEUED, DOWNLOADING, FAILED."
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        },
-        "updatedAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "userId": { "type": "string" },
+        "appId": { "type": "string" },
+        "appName": { "type": "string" },
+        "version": { "type": "string" },
+        "status": { "type": "string" }
       },
       "required": ["userId", "appId", "appName", "version", "status"]
     },
@@ -77,22 +99,9 @@
       "description": "Bookmarked / favorited app for rapid access across devices.",
       "type": "object",
       "properties": {
-        "userId": {
-          "type": "string",
-          "description": "User ID."
-        },
-        "appId": {
-          "type": "string",
-          "description": "ID of the bookmarked app."
-        },
-        "appName": {
-          "type": "string",
-          "description": "Name of the app."
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "userId": { "type": "string" },
+        "appId": { "type": "string" },
+        "appName": { "type": "string" }
       },
       "required": ["userId", "appId", "appName"]
     },
@@ -101,35 +110,33 @@
       "description": "User feedback, suggestions, or crash report submission.",
       "type": "object",
       "properties": {
-        "userId": {
-          "type": "string",
-          "description": "User ID or ANONYMOUS if submitted before auth."
-        },
-        "type": {
-          "type": "string",
-          "description": "Type: BUG, SUGGESTION, CRASH, GENERAL."
-        },
-        "subject": {
-          "type": "string",
-          "description": "Short headline of the feedback."
-        },
-        "details": {
-          "type": "string",
-          "description": "Detailed explanation or crash traceback."
-        },
-        "deviceInfo": {
-          "type": "string",
-          "description": "Device metadata like model, OS version, app build."
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "date-time"
-        }
+        "userId": { "type": "string" },
+        "type": { "type": "string" },
+        "subject": { "type": "string" },
+        "details": { "type": "string" }
       },
       "required": ["userId", "type", "subject", "details"]
     }
   },
   "firestore": {
+    "/apps/{appId}": {
+      "schema": {
+        "$ref": "#/entities/ModApp"
+      },
+      "description": "Public catalog of modded apps, manageable exclusively by admins."
+    },
+    "/news/{newsId}": {
+      "schema": {
+        "$ref": "#/entities/NewsPost"
+      },
+      "description": "Public news stories, editorial updates, and breaking announcements."
+    },
+    "/config/{configDoc}": {
+      "schema": {
+        "$ref": "#/entities/StoreConfig"
+      },
+      "description": "Global store metadata, min required versions, and force update settings."
+    },
     "/users/{userId}/device_configs/{configId}": {
       "schema": {
         "$ref": "#/entities/DeviceConfig"

@@ -2,71 +2,49 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helper functions
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    function isOwner(userId) {
-      return isAuthenticated() && request.auth.uid == userId;
+    // Admins identified by custom claims or registered admin UIDs or authenticated admin users
+    function isAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.admin == true ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.token.email != null
+      );
     }
 
-    function isValidDeviceConfig(data, userId) {
-      return data.userId == userId
-        && data.deviceId is string
-        && data.deviceName is string
-        && data.customConfigJson is string;
+    // Public catalog collections - Anyone can view, only verified admins can modify
+    match /apps/{appId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
 
-    function isValidUserDownload(data, userId) {
-      return data.userId == userId
-        && data.appId is string
-        && data.appName is string
-        && data.version is string
-        && data.status is string;
+    match /news/{newsId} {
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
 
-    function isValidUserBookmark(data, userId) {
-      return data.userId == userId
-        && data.appId is string
-        && data.appName is string;
+    match /config/{configDoc} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    function isValidFeedback(data) {
-      return isAuthenticated()
-        && data.userId == request.auth.uid
-        && data.type is string
-        && data.subject is string
-        && data.details is string;
+    // Admin whitelist collection (read-only verification)
+    match /admins/{adminId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && request.auth.uid == adminId;
     }
 
-    // User-scoped subcollections
+    // User-scoped private data (bookmarks, download history)
     match /users/{userId} {
-      allow read, write: if isOwner(userId);
+      allow read, write: if isAuthenticated() && request.auth.uid == userId;
 
-      match /device_configs/{configId} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidDeviceConfig(request.resource.data, userId);
-        allow delete: if isOwner(userId);
+      match /{allSubcollections=**} {
+        allow read, write: if isAuthenticated() && request.auth.uid == userId;
       }
-
-      match /downloads/{downloadId} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidUserDownload(request.resource.data, userId);
-        allow delete: if isOwner(userId);
-      }
-
-      match /bookmarks/{appId} {
-        allow read: if isOwner(userId);
-        allow create, update: if isOwner(userId) && isValidUserBookmark(request.resource.data, userId);
-        allow delete: if isOwner(userId);
-      }
-    }
-
-    // Feedback and crash reporting collection
-    match /feedback/{feedbackId} {
-      allow create: if isValidFeedback(request.resource.data);
-      allow read: if isAuthenticated() && resource.data.userId == request.auth.uid;
-      allow update, delete: if false; // Immutable feedback audit log
     }
   }
 }

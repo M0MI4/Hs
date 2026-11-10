@@ -21,28 +21,39 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Feedback
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Language
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.SupportAgent
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,6 +65,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.components.CupertinoGroupedCard
@@ -70,8 +82,10 @@ import com.example.ui.theme.iOSSystemGreen
 import com.example.ui.theme.iOSSystemIndigo
 import com.example.ui.theme.iOSSystemOrange
 import com.example.ui.theme.iOSSystemPurple
+import com.example.ui.theme.iOSSystemRed
 import com.example.ui.theme.iOSSystemTeal
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AboutScreen(
     currentPreset: ThemePreset,
@@ -79,6 +93,12 @@ fun AboutScreen(
     particlesEnabled: Boolean,
     particleDensity: ParticleDensity,
     currentLanguage: AppLanguage = AppLanguage.ENGLISH,
+    isAdminLoggedIn: Boolean = false,
+    adminEmail: String? = null,
+    onAdminLogin: (String, String) -> Unit = { _, _ -> },
+    onOpenAdminPanel: () -> Unit = {},
+    adminLoading: Boolean = false,
+    adminError: String? = null,
     onPresetSelected: (ThemePreset) -> Unit,
     onDarkThemeToggled: (Boolean) -> Unit,
     onParticlesEnabledToggled: (Boolean) -> Unit,
@@ -90,6 +110,37 @@ fun AboutScreen(
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var showFeedbackSheet by remember { mutableStateOf(false) }
+
+    var tapCount by remember { mutableIntStateOf(0) }
+    var lastTapTime by remember { mutableLongStateOf(0L) }
+    var showAdminLoginSheet by remember { mutableStateOf(false) }
+
+    // When admin successfully logs in, dismiss the login sheet and open panel
+    androidx.compose.runtime.LaunchedEffect(isAdminLoggedIn) {
+        if (isAdminLoggedIn && showAdminLoginSheet) {
+            showAdminLoginSheet = false
+            onOpenAdminPanel()
+        }
+    }
+
+    val onVersionTapped: () -> Unit = {
+        val now = System.currentTimeMillis()
+        if (now - lastTapTime > 2500) {
+            tapCount = 1
+        } else {
+            tapCount += 1
+        }
+        lastTapTime = now
+
+        if (tapCount >= 5) {
+            tapCount = 0
+            if (isAdminLoggedIn) {
+                onOpenAdminPanel()
+            } else {
+                showAdminLoginSheet = true
+            }
+        }
+    }
 
     val teamMembers = listOf(
         "Hassan S." to "Core Engine & Architecture",
@@ -335,6 +386,35 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
 
+        // Section 4.5: Administrative Studio (Unlocked when Admin authenticated)
+        if (isAdminLoggedIn) {
+            item {
+                Text(
+                    text = "ADMINISTRATIVE STUDIO",
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = VerifiedBadgeGreen,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 12.sp,
+                        letterSpacing = 0.5.sp
+                    ),
+                    modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
+                )
+
+                CupertinoGroupedCard {
+                    CupertinoSettingsRow(
+                        title = "Open Admin Studio",
+                        subtitle = "Signed in as ${adminEmail ?: "Admin"} • Manage Apps & Broadcasts",
+                        icon = Icons.Default.AdminPanelSettings,
+                        iconBgColor = VerifiedBadgeGreen,
+                        onClick = onOpenAdminPanel,
+                        showDivider = false
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+        }
+
         // Section 5: Version History & Technical Specs
         item {
             Text(
@@ -354,6 +434,7 @@ fun AboutScreen(
                     subtitle = "HsStore v1.3.0 (Build 30) • Apple Cupertino Edition",
                     icon = Icons.Default.Info,
                     iconBgColor = iOSSystemBlue,
+                    onClick = onVersionTapped,
                     showDivider = true,
                     trailingContent = {
                         Surface(
@@ -547,5 +628,155 @@ fun AboutScreen(
             onDismiss = { showFeedbackSheet = false },
             onSubmitFeedback = onSubmitFeedback
         )
+    }
+
+    // Admin Login Bottom Sheet (Discrete 5-tap entry)
+    if (showAdminLoginSheet) {
+        AdminLoginBottomSheet(
+            isLoading = adminLoading,
+            errorMessage = adminError,
+            onDismiss = { showAdminLoginSheet = false },
+            onLogin = { email, password ->
+                onAdminLogin(email, password)
+            }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AdminLoginBottomSheet(
+    isLoading: Boolean,
+    errorMessage: String?,
+    onDismiss: () -> Unit,
+    onLogin: (String, String) -> Unit
+) {
+    var email by remember { mutableStateOf("") }
+    var password by remember { mutableStateOf("") }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(56.dp)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.AdminPanelSettings,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(32.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Text(
+                text = "HsStore Administrative Portal",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+            )
+
+            Text(
+                text = "Authenticate with your administrator email & password to manage cloud catalog and news.",
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                ),
+                modifier = Modifier.padding(top = 4.dp, bottom = 16.dp)
+            )
+
+            if (errorMessage != null) {
+                Surface(
+                    color = iOSSystemRed.copy(alpha = 0.12f),
+                    shape = RoundedCornerShape(10.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, iOSSystemRed.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 12.dp)
+                ) {
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = iOSSystemRed,
+                            fontWeight = FontWeight.Medium
+                        ),
+                        modifier = Modifier.padding(10.dp)
+                    )
+                }
+            }
+
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                label = { Text("Admin Email") },
+                leadingIcon = {
+                    Icon(Icons.Default.Email, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                label = { Text("Password") },
+                leadingIcon = {
+                    Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                },
+                singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(modifier = Modifier.height(20.dp))
+
+            Button(
+                onClick = { onLogin(email, password) },
+                enabled = !isLoading && email.isNotBlank() && password.isNotBlank(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+            ) {
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = Color.White,
+                        strokeWidth = 2.dp
+                    )
+                } else {
+                    Text("Authenticate as Administrator", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            OutlinedButton(
+                onClick = onDismiss,
+                shape = RoundedCornerShape(12.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text("Cancel")
+            }
+
+            Spacer(modifier = Modifier.height(24.dp))
+        }
     }
 }

@@ -46,8 +46,8 @@ fun AppsScreen(
     onBookmarkToggle: (ModApp) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val rawCategories = listOf("All", "Games", "Tools", "Tweaks", "Emulators", "Media")
-    val categoryKeys = listOf("cat_all", "cat_games", "cat_tools", "cat_tweaks", "cat_emulators", "cat_media")
+    val rawCategories = listOf("All", "Apps", "Games")
+    val categoryKeys = listOf("cat_all", "cat_apps", "cat_games")
     val localizedCategories = remember(currentLanguage) {
         categoryKeys.map { LocalizedStrings.get(it, currentLanguage) }
     }
@@ -56,10 +56,18 @@ fun AppsScreen(
     var searchQuery by remember { mutableStateOf("") }
 
     val filteredApps = remember(apps, selectedCategoryIndex, searchQuery) {
-        val selectedRawCat = rawCategories[selectedCategoryIndex]
+        val selectedRawCat = rawCategories.getOrElse(selectedCategoryIndex) { "All" }
         var list = apps
-        if (selectedRawCat != "All") {
-            list = list.filter { it.category.equals(selectedRawCat, ignoreCase = true) }
+        when (selectedRawCat) {
+            "Games" -> list = list.filter {
+                it.category.equals("Games", ignoreCase = true) ||
+                it.category.equals("Emulators", ignoreCase = true)
+            }
+            "Apps" -> list = list.filter {
+                !it.category.equals("Games", ignoreCase = true) &&
+                !it.category.equals("Emulators", ignoreCase = true)
+            }
+            else -> { /* "All" -> include all apps */ }
         }
         if (searchQuery.isNotBlank()) {
             val q = searchQuery.trim().lowercase()

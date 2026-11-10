@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
@@ -51,7 +52,10 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.data.model.ModApp
+import com.example.ui.admin.AdminPanelScreen
+import com.example.ui.admin.AdminViewModel
 import com.example.ui.components.AppDetailSheet
 import com.example.ui.components.CupertinoFloatingTabBar
 import com.example.ui.components.ParticleCanvas
@@ -62,6 +66,7 @@ import com.example.ui.screens.AppsScreen
 import com.example.ui.screens.DownloadsScreen
 import com.example.ui.screens.TodayNewsScreen
 import com.example.ui.theme.HsStoreTheme
+import com.example.ui.theme.VerifiedBadgeGreen
 import com.example.ui.viewmodel.DownloadsViewModel
 import com.example.ui.viewmodel.SettingsViewModel
 import com.example.ui.viewmodel.StoreViewModel
@@ -86,6 +91,7 @@ class MainActivity : ComponentActivity() {
     private val storeViewModel: StoreViewModel by viewModels()
     private val downloadsViewModel: DownloadsViewModel by viewModels()
     private val settingsViewModel: SettingsViewModel by viewModels()
+    private val adminViewModel: AdminViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -106,6 +112,7 @@ class MainActivity : ComponentActivity() {
                     storeViewModel = storeViewModel,
                     downloadsViewModel = downloadsViewModel,
                     settingsViewModel = settingsViewModel,
+                    adminViewModel = adminViewModel,
                     isOnline = isOnline
                 )
             }
@@ -118,10 +125,14 @@ fun MainAppContent(
     storeViewModel: StoreViewModel,
     downloadsViewModel: DownloadsViewModel,
     settingsViewModel: SettingsViewModel,
+    adminViewModel: AdminViewModel,
     isOnline: Boolean
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+
+    val adminState by adminViewModel.adminState.collectAsState()
+    var showAdminPanel by remember { mutableStateOf(false) }
 
     // Preferences & Theme States from SettingsViewModel
     val currentTab by settingsViewModel.currentTab.collectAsState()
@@ -169,8 +180,12 @@ fun MainAppContent(
         }
     }
 
+    BackHandler(enabled = showAdminPanel) {
+        showAdminPanel = false
+    }
+
     // Custom back navigation: return to Today tab
-    if (currentTab != MainTab.TODAY) {
+    if (!showAdminPanel && currentTab != MainTab.TODAY) {
         BackHandler {
             settingsViewModel.setTab(MainTab.TODAY)
         }
@@ -180,11 +195,17 @@ fun MainAppContent(
     CompositionLocalProvider(
         LocalLayoutDirection provides if (currentLanguage.isRtl) LayoutDirection.Rtl else LayoutDirection.Ltr
     ) {
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
+        if (showAdminPanel) {
+            AdminPanelScreen(
+                adminViewModel = adminViewModel,
+                onNavigateBack = { showAdminPanel = false }
+            )
+        } else {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
             // Particle Canvas FX
             ParticleCanvas(
                 enabled = particlesEnabled,
@@ -346,6 +367,12 @@ fun MainAppContent(
                             particlesEnabled = particlesEnabled,
                             particleDensity = particleDensity,
                             currentLanguage = currentLanguage,
+                            isAdminLoggedIn = adminState.isAdminLoggedIn,
+                            adminEmail = adminState.currentAdminEmail,
+                            onAdminLogin = { email, pass -> adminViewModel.loginAdmin(email, pass) },
+                            onOpenAdminPanel = { showAdminPanel = true },
+                            adminLoading = adminState.isLoading,
+                            adminError = adminState.errorMessage,
                             onPresetSelected = { settingsViewModel.setThemePreset(it) },
                             onDarkThemeToggled = { settingsViewModel.toggleDarkTheme(it) },
                             onParticlesEnabledToggled = { settingsViewModel.toggleParticles(it) },
@@ -396,6 +423,42 @@ fun MainAppContent(
                     }
                 )
             }
+
+            // Floating Cupertino Admin Badge
+            if (adminState.isAdminLoggedIn) {
+                Surface(
+                    onClick = { showAdminPanel = true },
+                    shape = RoundedCornerShape(20.dp),
+                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                    border = BorderStroke(1.dp, VerifiedBadgeGreen.copy(alpha = 0.8f)),
+                    shadowElevation = 8.dp,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 16.dp, bottom = 96.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(8.dp)
+                                .clip(CircleShape)
+                                .background(VerifiedBadgeGreen)
+                        )
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = "Admin Studio",
+                            style = MaterialTheme.typography.labelSmall.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
+                                fontSize = 11.sp
+                            )
+                        )
+                    }
+                }
+            }
         }
     }
+}
 }

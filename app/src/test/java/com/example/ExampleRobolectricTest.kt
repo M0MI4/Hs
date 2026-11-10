@@ -34,4 +34,30 @@ class ExampleRobolectricTest {
     val state = com.example.util.InstallStatusHelper.getAppInstallState(context, "com.nonexistent.package.app", 1)
     assertEquals(com.example.util.AppInstallState.GET, state)
   }
+
+  @Test
+  fun `admin state defaults to logged out`() {
+    val state = com.example.ui.admin.AdminState()
+    assertEquals(false, state.isAdminLoggedIn)
+    assertEquals(null, state.currentAdminEmail)
+  }
+
+  @Test
+  fun `admin view model can be instantiated by application context`() {
+    val application = ApplicationProvider.getApplicationContext<android.app.Application>()
+    if (com.google.firebase.FirebaseApp.getApps(application).isEmpty()) {
+        try {
+            com.google.firebase.FirebaseApp.initializeApp(
+                application,
+                com.google.firebase.FirebaseOptions.Builder()
+                    .setApplicationId("com.aistudio.hsstore.modapk")
+                    .setProjectId("test-project")
+                    .setApiKey("fake-api-key-for-test")
+                    .build()
+            )
+        } catch (_: Exception) {}
+    }
+    val vm = com.example.ui.admin.AdminViewModel(application)
+    assertEquals(false, vm.adminState.value.isAdminLoggedIn)
+  }
 }
