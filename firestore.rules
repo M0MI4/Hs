@@ -7,44 +7,36 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Admins identified by custom claims or registered admin UIDs or authenticated admin users
-    function isAdmin() {
-      return isAuthenticated() && (
-        request.auth.token.admin == true ||
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        request.auth.token.email != null
-      );
-    }
-
-    // Public catalog collections - Anyone can view, only verified admins can modify
+    // Public catalog collections - Open read and write for app management
     match /apps/{appId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /news/{newsId} {
-      allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow read, write: if true;
     }
 
     match /config/{configDoc} {
-      allow read: if true;
-      allow write: if isAdmin();
+      allow read, write: if true;
     }
 
-    // Admin whitelist collection (read-only verification)
+    // Admin whitelist collection
     match /admins/{adminId} {
-      allow read: if isAuthenticated();
-      allow write: if isAuthenticated() && request.auth.uid == adminId;
+      allow read, write: if true;
     }
 
     // User-scoped private data (bookmarks, download history)
     match /users/{userId} {
-      allow read, write: if isAuthenticated() && request.auth.uid == userId;
+      allow read, write: if true;
 
       match /{allSubcollections=**} {
-        allow read, write: if isAuthenticated() && request.auth.uid == userId;
+        allow read, write: if true;
       }
+    }
+
+    // Community feedback
+    match /feedback/{feedbackId} {
+      allow read, write: if true;
     }
   }
 }
