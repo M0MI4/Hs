@@ -12,16 +12,17 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create debug.keystore in all expected paths
+      - name: Create debug and release keystores
         run: |
-          mkdir -p ~/.android app
-          rm -f ~/.android/debug.keystore ./debug.keystore app/debug.keystore
-          keytool -genkey -v -keystore ~/.android/debug.keystore \
+          rm -f ./debug.keystore ./my-upload-key.jks
+          keytool -genkey -v -keystore ./debug.keystore \
             -storepass android -alias androiddebugkey -keypass android \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
-          cp ~/.android/debug.keystore ./debug.keystore
-          cp ~/.android/debug.keystore app/debug.keystore
+          keytool -genkey -v -keystore ./my-upload-key.jks \
+            -storepass android -alias upload -keypass android \
+            -keyalg RSA -keysize 2048 -validity 10000 \
+            -dname "CN=HsStore Release,O=HsStore,C=US"
 
       - name: Create dummy google-services.json if missing
         run: |
@@ -30,8 +31,12 @@ jobs:
             echo '{"project_info":{"project_number":"1","project_id":"ai-studio-android-hsstore-5afff47c-ff18-4e6a-894b-5eb263ea8a4b","storage_bucket":"dummy.appspot.com"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"com.aistudio.hsstore.modapk"}},"oauth_client":[{"client_id":"1-dummy.apps.googleusercontent.com","client_type":3}],"api_key":[{"current_key":"AIzaSyDummyKeyForBuildCompilationOnly"}],"services":{"appinvite_service":{"other_platform_oauth_client":[{"client_id":"1-dummy.apps.googleusercontent.com","client_type":3}]}}}],"configuration_version":"1"}' > app/google-services.json
           fi
 
-      - name: Build Optimized Release & Debug APKs
-        run: gradle assembleRelease assembleDebug --stacktrace
+      - name: Build Release & Debug APKs
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
+          STORE_PASSWORD: android
+          KEY_PASSWORD: android
+        run: gradle assembleRelease assembleDebug
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
