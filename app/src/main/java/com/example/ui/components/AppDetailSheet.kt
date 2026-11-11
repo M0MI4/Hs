@@ -82,6 +82,10 @@ import com.example.ui.theme.VerifiedBadgeGreen
 import com.example.util.AppInstallState
 import com.example.util.InstallStatusHelper
 
+private val DetailIconShape = RoundedCornerShape(16.dp)
+private val ScreenshotShape = RoundedCornerShape(12.dp)
+private val ChecksumCardShape = RoundedCornerShape(12.dp)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppDetailSheet(
@@ -94,6 +98,17 @@ fun AppDetailSheet(
     val clipboardManager = LocalClipboardManager.current
     val context = LocalContext.current
     var selectedTab by remember { mutableIntStateOf(0) }
+
+    val iconImageRequest = remember(app.iconUrl) {
+        coil.request.ImageRequest.Builder(context)
+            .data(app.iconUrl)
+            .size(216, 216)
+            .allowHardware(true)
+            .crossfade(false)
+            .memoryCacheKey(app.iconUrl)
+            .diskCacheKey(app.iconUrl)
+            .build()
+    }
 
     // Dynamic App Install State (GET, UPDATE, OPEN)
     val installState = remember(app.packageName, app.versionCode) {
@@ -149,13 +164,13 @@ fun AppDetailSheet(
                 Box(
                     modifier = Modifier
                         .size(72.dp)
-                        .clip(RoundedCornerShape(16.dp))
+                        .clip(DetailIconShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
                     if (app.iconUrl.isNotBlank()) {
                         AsyncImage(
-                            model = app.iconUrl,
+                            model = iconImageRequest,
                             contentDescription = app.name,
                             modifier = Modifier.size(72.dp),
                             contentScale = ContentScale.Crop
@@ -324,9 +339,23 @@ fun AppDetailSheet(
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 contentPadding = PaddingValues(end = 12.dp)
             ) {
-                itemsIndexed(screenshots) { index, url ->
+                itemsIndexed(
+                    items = screenshots,
+                    key = { _, url -> url },
+                    contentType = { _, _ -> "screenshot_thumbnail" }
+                ) { index, url ->
+                    val screenshotRequest = remember(url) {
+                        coil.request.ImageRequest.Builder(context)
+                            .data(url)
+                            .allowHardware(true)
+                            .crossfade(false)
+                            .memoryCacheKey(url)
+                            .diskCacheKey(url)
+                            .build()
+                    }
+
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = ScreenshotShape,
                         color = MaterialTheme.colorScheme.surfaceVariant,
                         border = androidx.compose.foundation.BorderStroke(
                             0.5.dp,
@@ -335,11 +364,11 @@ fun AppDetailSheet(
                         modifier = Modifier
                             .width(130.dp)
                             .height(220.dp)
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(ScreenshotShape)
                             .clickable { lightboxInitialIndex = index }
                     ) {
                         AsyncImage(
-                            model = url,
+                            model = screenshotRequest,
                             contentDescription = "Screenshot ${index + 1}",
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()

@@ -43,10 +43,17 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.border
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +63,44 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.theme.iOSGetButtonText
 import com.example.ui.theme.iOSSystemBlue
 import com.example.ui.theme.iOSSystemGreen
+
+// Top-level static shapes to eliminate per-frame allocations during scrolling
+val CupertinoGroupShape = RoundedCornerShape(16.dp)
+val CupertinoCardShape = RoundedCornerShape(16.dp)
+val CupertinoSearchShape = RoundedCornerShape(10.dp)
+val CupertinoRowIconShape = RoundedCornerShape(7.dp)
+val CupertinoGetButtonShape = CircleShape
+
+/**
+ * Cached Cupertino surface modifier with zero allocations on scroll frames.
+ */
+fun Modifier.cachedCupertinoCard(
+    backgroundColor: Color,
+    borderColor: Color,
+    shape: Shape = CupertinoGroupShape
+): Modifier = this
+    .graphicsLayer {
+        this.shape = shape
+        this.clip = true
+    }
+    .drawWithCache {
+        onDrawBehind {
+            drawRect(color = backgroundColor)
+        }
+    }
+    .border(width = 0.75.dp, color = borderColor, shape = shape)
+
+/**
+ * Defer header collapse calculations to derivedStateOf to prevent scroll offset recomposition storms.
+ */
+@Composable
+fun rememberIsHeaderCollapsed(listState: LazyListState): State<Boolean> {
+    return remember(listState) {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 80
+        }
+    }
+}
 
 /**
  * iOS App Store Style "GET" capsule button
@@ -165,13 +210,13 @@ fun CupertinoGroupedCard(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Surface(
-        shape = RoundedCornerShape(14.dp),
+        shape = CupertinoGroupShape,
         color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(
             0.5.dp,
             MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
         ),
-        shadowElevation = 1.dp,
+        shadowElevation = 0.dp,
         modifier = modifier.fillMaxWidth()
     ) {
         Column(content = content)
@@ -211,7 +256,7 @@ fun CupertinoSettingsRow(
                     Box(
                         modifier = Modifier
                             .size(30.dp)
-                            .clip(RoundedCornerShape(7.dp))
+                            .clip(CupertinoRowIconShape)
                             .background(iconBgColor),
                         contentAlignment = Alignment.Center
                     ) {
@@ -312,7 +357,7 @@ fun CupertinoSearchField(
             }
         },
         singleLine = true,
-        shape = RoundedCornerShape(10.dp),
+        shape = CupertinoSearchShape,
         colors = TextFieldDefaults.colors(
             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
             unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),

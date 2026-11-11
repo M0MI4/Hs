@@ -385,9 +385,11 @@ private fun AppsManagementView(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        userScrollEnabled = true,
+        flingBehavior = androidx.compose.foundation.gestures.ScrollableDefaults.flingBehavior(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 90.dp)
     ) {
-        item(key = "apps_header") {
+        item(key = "apps_header", contentType = "header") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -478,7 +480,8 @@ private fun AppsManagementView(
         } else {
             itemsIndexed(
                 items = filteredApps,
-                key = { _, app -> app.id.ifBlank { app.packageName } }
+                key = { _, app -> app.id.ifBlank { app.packageName } },
+                contentType = { _, _ -> "admin_app_card" }
             ) { index, app ->
                 AdminAppItemCard(
                     app = app,
@@ -979,9 +982,11 @@ private fun NewsManagementView(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        userScrollEnabled = true,
+        flingBehavior = androidx.compose.foundation.gestures.ScrollableDefaults.flingBehavior(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 90.dp)
     ) {
-        item(key = "news_header") {
+        item(key = "news_header", contentType = "header") {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -1065,7 +1070,8 @@ private fun NewsManagementView(
         } else {
             itemsIndexed(
                 items = newsList,
-                key = { _, post -> post.id.ifBlank { post.title } }
+                key = { _, post -> post.id.ifBlank { post.title } },
+                contentType = { _, _ -> "admin_news_card" }
             ) { index, post ->
                 var accumulatedDragY by remember { mutableFloatStateOf(0f) }
 
@@ -1211,10 +1217,12 @@ private fun StoreConfigView(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
+        userScrollEnabled = true,
+        flingBehavior = androidx.compose.foundation.gestures.ScrollableDefaults.flingBehavior(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 90.dp)
     ) {
         // Broadcast User Notification Section
-        item {
+        item(key = "broadcast_notification", contentType = "card") {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -1327,7 +1335,7 @@ private fun StoreConfigView(
         }
 
         // Force Update Section
-        item {
+        item(key = "force_update", contentType = "card") {
             Card(
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),

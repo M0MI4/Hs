@@ -36,8 +36,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -46,6 +46,9 @@ import androidx.compose.ui.unit.sp
 import com.example.MainTab
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.LocalizedStrings
+
+private val TabBarShape = RoundedCornerShape(26.dp)
+private val TabItemShape = RoundedCornerShape(16.dp)
 
 /**
  * Authentic Apple iOS Floating Glass Tab Bar
@@ -73,7 +76,7 @@ fun CupertinoFloatingTabBar(
     }
 
     Surface(
-        shape = RoundedCornerShape(26.dp),
+        shape = TabBarShape,
         color = glassBg,
         shadowElevation = if (isDarkTheme) 6.dp else 8.dp,
         border = androidx.compose.foundation.BorderStroke(0.5.dp, glassBorder),
@@ -154,14 +157,17 @@ private fun CupertinoTabItem(
 
     Column(
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(TabItemShape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .scale(scale),
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+            },
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {

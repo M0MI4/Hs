@@ -28,6 +28,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
+import coil.request.ImageRequest
 import com.example.util.AppInstallState
 import com.example.util.InstallStatusHelper
 import androidx.compose.ui.Alignment
@@ -43,6 +44,10 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.data.model.ModApp
 import com.example.ui.theme.VerifiedBadgeGreen
+
+// Top-level static shapes to eliminate per-frame allocations during scrolling
+private val ModCardShape = RoundedCornerShape(16.dp)
+private val ModIconSquircleShape = RoundedCornerShape(14.dp)
 
 @Composable
 fun ModAppCard(
@@ -70,8 +75,21 @@ fun ModAppCard(
         if (app.modFeatures.isNotEmpty()) "⚡ " + app.modFeatures.joinToString(" • ") else ""
     }
 
+    val imageRequest = remember(app.iconUrl, app.packageName, app.versionCode) {
+        if (app.iconUrl.isNotBlank()) {
+            ImageRequest.Builder(context)
+                .data(app.iconUrl)
+                .size(186, 186)
+                .memoryCacheKey("mod_icon_${app.packageName}_${app.versionCode}")
+                .diskCacheKey("mod_icon_${app.packageName}_${app.versionCode}")
+                .allowHardware(true)
+                .crossfade(false)
+                .build()
+        } else null
+    }
+
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = ModCardShape,
         color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(
             0.5.dp,
@@ -80,7 +98,7 @@ fun ModAppCard(
         shadowElevation = 0.dp,
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp))
+            .clip(ModCardShape)
             .clickable(onClick = onAppClick)
             .testTag("mod_card_${app.id}")
     ) {
@@ -93,13 +111,13 @@ fun ModAppCard(
                 Box(
                     modifier = Modifier
                         .size(62.dp)
-                        .clip(RoundedCornerShape(14.dp))
+                        .clip(ModIconSquircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (app.iconUrl.isNotBlank()) {
+                    if (imageRequest != null) {
                         AsyncImage(
-                            model = app.iconUrl,
+                            model = imageRequest,
                             contentDescription = "${app.name} icon",
                             modifier = Modifier.size(62.dp),
                             contentScale = ContentScale.Crop

@@ -33,6 +33,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +54,10 @@ import com.example.ui.theme.VerifiedBadgeGreen
 
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.LocalizedStrings
+import androidx.compose.foundation.gestures.ScrollableDefaults
+import androidx.compose.ui.platform.LocalContext
+
+private val TaskIconShape = RoundedCornerShape(11.dp)
 
 @Composable
 fun DownloadsScreen(
@@ -64,6 +69,7 @@ fun DownloadsScreen(
     onResume: (String) -> Unit,
     onCancel: (String) -> Unit,
     onInstall: (DownloadTask) -> Unit,
+    onIsScrollingChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val activeTasks = androidx.compose.runtime.remember(tasks) {
@@ -73,19 +79,29 @@ fun DownloadsScreen(
         tasks.filter { it.status == DownloadStatus.COMPLETED || it.status == DownloadStatus.FAILED }
     }
 
+    val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    // Smoothness: notify container when scrolling to pause background animations
+    androidx.compose.runtime.LaunchedEffect(lazyListState.isScrollInProgress) {
+        onIsScrollingChanged(lazyListState.isScrollInProgress)
+    }
+
     CupertinoPullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
         modifier = modifier.fillMaxSize()
     ) {
         LazyColumn(
+            state = lazyListState,
+            userScrollEnabled = true,
+            flingBehavior = ScrollableDefaults.flingBehavior(),
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("downloads_screen"),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp)
         ) {
         // iOS Large Title Header
-        item(key = "downloads_header") {
+        item(key = "downloads_header", contentType = "header") {
             Column(modifier = Modifier.padding(vertical = 12.dp)) {
                 Text(
                     text = LocalizedStrings.get("downloads_kicker", currentLanguage),
@@ -108,7 +124,7 @@ fun DownloadsScreen(
 
         // Active Downloads Group
         if (activeTasks.isNotEmpty()) {
-            item(key = "active_downloads_group") {
+            item(key = "active_downloads_group", contentType = "active_group") {
                 Text(
                     text = "${LocalizedStrings.get("downloads_active_queue", currentLanguage)} (${activeTasks.size})",
                     style = MaterialTheme.typography.labelSmall.copy(
@@ -137,7 +153,7 @@ fun DownloadsScreen(
         }
 
         // Downloaded Packages Group
-        item(key = "completed_downloads_group") {
+        item(key = "completed_downloads_group", contentType = "completed_group") {
             Text(
                 text = "${LocalizedStrings.get("downloads_completed", currentLanguage)} (${completedTasks.size})",
                 style = MaterialTheme.typography.labelSmall.copy(
@@ -199,6 +215,18 @@ private fun ActiveDownloadRow(
     onCancel: () -> Unit,
     showDivider: Boolean
 ) {
+    val context = LocalContext.current
+    val iconRequest = remember(task.iconUrl) {
+        coil.request.ImageRequest.Builder(context)
+            .data(task.iconUrl)
+            .size(144, 144)
+            .allowHardware(true)
+            .crossfade(false)
+            .memoryCacheKey(task.iconUrl)
+            .diskCacheKey(task.iconUrl)
+            .build()
+    }
+
     Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -207,13 +235,13 @@ private fun ActiveDownloadRow(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .clip(RoundedCornerShape(11.dp))
+                    .clip(TaskIconShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
                 if (task.iconUrl.isNotBlank()) {
                     AsyncImage(
-                        model = task.iconUrl,
+                        model = iconRequest,
                         contentDescription = task.appName,
                         modifier = Modifier.size(48.dp),
                         contentScale = ContentScale.Crop
@@ -282,6 +310,18 @@ private fun CompletedDownloadRow(
     onDelete: () -> Unit,
     showDivider: Boolean
 ) {
+    val context = LocalContext.current
+    val iconRequest = remember(task.iconUrl) {
+        coil.request.ImageRequest.Builder(context)
+            .data(task.iconUrl)
+            .size(144, 144)
+            .allowHardware(true)
+            .crossfade(false)
+            .memoryCacheKey(task.iconUrl)
+            .diskCacheKey(task.iconUrl)
+            .build()
+    }
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -291,13 +331,13 @@ private fun CompletedDownloadRow(
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .clip(RoundedCornerShape(11.dp))
+                .clip(TaskIconShape)
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             contentAlignment = Alignment.Center
         ) {
             if (task.iconUrl.isNotBlank()) {
                 AsyncImage(
-                    model = task.iconUrl,
+                    model = iconRequest,
                     contentDescription = task.appName,
                     modifier = Modifier.size(48.dp),
                     contentScale = ContentScale.Crop

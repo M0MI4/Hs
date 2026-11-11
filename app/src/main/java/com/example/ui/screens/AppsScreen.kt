@@ -54,6 +54,13 @@ import com.example.ui.components.ModAppCard
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.LocalizedStrings
 
+import androidx.compose.foundation.gestures.ScrollableDefaults
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+private val ReorderPillShape = RoundedCornerShape(12.dp)
+private val ReorderHandleShape = RoundedCornerShape(8.dp)
+
 @Composable
 fun AppsScreen(
     apps: List<ModApp>,
@@ -86,29 +93,32 @@ fun AppsScreen(
         onIsScrollingChanged(lazyListState.isScrollInProgress)
     }
 
-    val filteredApps = remember(apps, selectedCategoryIndex, searchQuery) {
-        val selectedRawCat = rawCategories.getOrElse(selectedCategoryIndex) { "All" }
-        var list = apps
-        when (selectedRawCat) {
-            "Games" -> list = list.filter {
-                it.category.equals("Games", ignoreCase = true) ||
-                it.category.equals("Emulators", ignoreCase = true)
+    // Offload search and filtering from Main thread to Dispatchers.Default
+    val filteredApps by androidx.compose.runtime.produceState(initialValue = apps, apps, selectedCategoryIndex, searchQuery) {
+        value = withContext(Dispatchers.Default) {
+            val selectedRawCat = rawCategories.getOrElse(selectedCategoryIndex) { "All" }
+            var list = apps
+            when (selectedRawCat) {
+                "Games" -> list = list.filter {
+                    it.category.equals("Games", ignoreCase = true) ||
+                    it.category.equals("Emulators", ignoreCase = true)
+                }
+                "Apps" -> list = list.filter {
+                    !it.category.equals("Games", ignoreCase = true) &&
+                    !it.category.equals("Emulators", ignoreCase = true)
+                }
+                else -> { /* "All" -> include all apps */ }
             }
-            "Apps" -> list = list.filter {
-                !it.category.equals("Games", ignoreCase = true) &&
-                !it.category.equals("Emulators", ignoreCase = true)
+            if (searchQuery.isNotBlank()) {
+                val q = searchQuery.trim().lowercase()
+                list = list.filter {
+                    it.name.lowercase().contains(q) ||
+                    it.description.lowercase().contains(q) ||
+                    it.author.lowercase().contains(q)
+                }
             }
-            else -> { /* "All" -> include all apps */ }
+            list
         }
-        if (searchQuery.isNotBlank()) {
-            val q = searchQuery.trim().lowercase()
-            list = list.filter {
-                it.name.lowercase().contains(q) ||
-                it.description.lowercase().contains(q) ||
-                it.author.lowercase().contains(q)
-            }
-        }
-        list
     }
 
     val searchPlaceholder = remember(currentLanguage, localizedCategories, selectedCategoryIndex) {
@@ -129,13 +139,15 @@ fun AppsScreen(
     ) {
         LazyColumn(
             state = lazyListState,
+            userScrollEnabled = true,
+            flingBehavior = ScrollableDefaults.flingBehavior(),
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("apps_screen"),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp)
         ) {
             // iOS Large Title Header
-            item(key = "header_title") {
+            item(key = "header_title", contentType = "header") {
                 Column(modifier = Modifier.padding(vertical = 12.dp)) {
                     Text(
                         text = LocalizedStrings.get("apps_kicker", currentLanguage),
@@ -188,7 +200,7 @@ fun AppsScreen(
             }
 
             // Category Count + Edit Reorder Button
-            item(key = "header_category_count") {
+            item(key = "header_category_count", contentType = "category_count") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -208,10 +220,10 @@ fun AppsScreen(
 
                     // Three Lines Reorder Button Toggle
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = ReorderPillShape,
                         color = if (isReorderMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(ReorderPillShape)
                             .clickable { isReorderMode = !isReorderMode }
                             .testTag("toggle_reorder_mode")
                     ) {
@@ -249,7 +261,7 @@ fun AppsScreen(
                     }
                 }
             } else if (filteredApps.isEmpty()) {
-                item(key = "empty_search_state") {
+                item(key = "empty_search_state", contentType = "empty_state") {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -338,7 +350,7 @@ fun AppsScreen(
 
                                     // Three Lines Under Each Other (Drag Handle)
                                     Surface(
-                                        shape = RoundedCornerShape(8.dp),
+                                        shape = ReorderHandleShape,
                                         color = MaterialTheme.colorScheme.surfaceVariant,
                                         modifier = Modifier
                                             .padding(start = 2.dp)

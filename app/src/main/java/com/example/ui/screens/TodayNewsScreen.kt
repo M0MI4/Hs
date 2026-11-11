@@ -90,9 +90,20 @@ import com.example.ui.theme.iOSSystemIndigo
 import com.example.ui.theme.iOSSystemOrange
 import com.example.ui.theme.iOSSystemPurple
 import com.example.ui.theme.iOSSystemRed
+import androidx.compose.foundation.gestures.ScrollableDefaults
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+// Top-level static shapes to eliminate per-frame allocations during scroll
+private val BannerNewsShape = RoundedCornerShape(20.dp)
+private val TextNewsShape = RoundedCornerShape(18.dp)
+private val PatchNotesShape = RoundedCornerShape(18.dp)
+private val NewsTagShape = RoundedCornerShape(6.dp)
+private val NewsReorderShape = RoundedCornerShape(12.dp)
+private val NewsDragHandleShape = RoundedCornerShape(8.dp)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -133,21 +144,23 @@ fun TodayNewsScreen(
         sdf.format(Date()).uppercase(locale)
     }
 
-    // Filter and search
-    val filteredNews = remember(newsList, searchQuery) {
-        var list = newsList
-        if (searchQuery.isNotBlank()) {
-            val q = searchQuery.trim().lowercase()
-            list = list.filter {
-                it.title.lowercase().contains(q) ||
-                it.subtitle.lowercase().contains(q) ||
-                it.content.lowercase().contains(q) ||
-                it.tag.lowercase().contains(q) ||
-                it.author.lowercase().contains(q) ||
-                it.bulletPoints.any { b -> b.lowercase().contains(q) }
+    // Filter and search offloaded from main thread
+    val filteredNews by androidx.compose.runtime.produceState(initialValue = newsList, newsList, searchQuery) {
+        value = withContext(Dispatchers.Default) {
+            var list = newsList
+            if (searchQuery.isNotBlank()) {
+                val q = searchQuery.trim().lowercase()
+                list = list.filter {
+                    it.title.lowercase().contains(q) ||
+                    it.subtitle.lowercase().contains(q) ||
+                    it.content.lowercase().contains(q) ||
+                    it.tag.lowercase().contains(q) ||
+                    it.author.lowercase().contains(q) ||
+                    it.bulletPoints.any { b -> b.lowercase().contains(q) }
+                }
             }
+            list
         }
-        list
     }
 
     CupertinoPullToRefreshBox(
@@ -157,13 +170,15 @@ fun TodayNewsScreen(
     ) {
         LazyColumn(
             state = lazyListState,
+            userScrollEnabled = true,
+            flingBehavior = ScrollableDefaults.flingBehavior(),
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("today_news_screen"),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp)
         ) {
             // 1. iOS Today Header: Date Kicker + Large Title + Particle Toggle
-            item(key = "today_header") {
+            item(key = "today_header", contentType = "header") {
                 Column(modifier = Modifier.padding(top = 10.dp, bottom = 12.dp)) {
                     Text(
                         text = todayFormatted,
@@ -224,7 +239,7 @@ fun TodayNewsScreen(
             }
 
             // 2. Search Field + Reorder Toggle
-            item(key = "today_controls") {
+            item(key = "today_controls", contentType = "controls") {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -242,10 +257,10 @@ fun TodayNewsScreen(
                     Spacer(modifier = Modifier.width(8.dp))
 
                     Surface(
-                        shape = RoundedCornerShape(12.dp),
+                        shape = NewsReorderShape,
                         color = if (isReorderMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
                         modifier = Modifier
-                            .clip(RoundedCornerShape(12.dp))
+                            .clip(NewsReorderShape)
                             .clickable { isReorderMode = !isReorderMode }
                             .testTag("toggle_news_reorder_mode")
                     ) {
@@ -274,7 +289,7 @@ fun TodayNewsScreen(
 
             // 3. News Items: Banner News & Just Text News
             if (filteredNews.isEmpty()) {
-                item(key = "today_empty") {
+                item(key = "today_empty", contentType = "empty") {
                     Surface(
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surface,
@@ -475,17 +490,28 @@ fun BannerNewsCard(
         } else null
     }
 
+    val context = LocalContext.current
+    val bannerImageRequest = remember(news.bannerUrl) {
+        coil.request.ImageRequest.Builder(context)
+            .data(news.bannerUrl)
+            .allowHardware(true)
+            .crossfade(false)
+            .memoryCacheKey(news.bannerUrl)
+            .diskCacheKey(news.bannerUrl)
+            .build()
+    }
+
     Surface(
-        shape = RoundedCornerShape(20.dp),
+        shape = BannerNewsShape,
         color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(
             0.5.dp,
             MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
         ),
-        shadowElevation = 2.dp,
+        shadowElevation = 0.dp,
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(20.dp))
+            .clip(BannerNewsShape)
             .clickable(onClick = onCardClick)
             .testTag("news_banner_card_${news.id}")
     ) {
@@ -499,7 +525,7 @@ fun BannerNewsCard(
             ) {
                 if (news.bannerUrl.isNotBlank()) {
                     AsyncImage(
-                        model = news.bannerUrl,
+                        model = bannerImageRequest,
                         contentDescription = news.title,
                         contentScale = ContentScale.Crop,
                         modifier = Modifier.fillMaxSize()
@@ -671,16 +697,16 @@ fun TextOnlyNewsCard(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = TextNewsShape,
         color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(
             0.5.dp,
             MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
         ),
-        shadowElevation = 1.5.dp,
+        shadowElevation = 0.dp,
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(TextNewsShape)
             .clickable(onClick = onCardClick)
             .testTag("news_text_card_${news.id}")
     ) {
@@ -692,7 +718,7 @@ fun TextOnlyNewsCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
+                    shape = NewsTagShape,
                     color = when {
                         news.isBreaking -> iOSSystemRed.copy(alpha = 0.15f)
                         news.tag.contains("SECURITY", ignoreCase = true) -> iOSSystemOrange.copy(alpha = 0.15f)
@@ -841,16 +867,16 @@ fun PatchNotesCard(
     modifier: Modifier = Modifier
 ) {
     Surface(
-        shape = RoundedCornerShape(18.dp),
+        shape = PatchNotesShape,
         color = MaterialTheme.colorScheme.surface,
         border = androidx.compose.foundation.BorderStroke(
             0.5.dp,
             MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
         ),
-        shadowElevation = 1.5.dp,
+        shadowElevation = 0.dp,
         modifier = modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
+            .clip(PatchNotesShape)
             .clickable(onClick = onCardClick)
             .testTag("news_patch_card_${news.id}")
     ) {
@@ -861,7 +887,7 @@ fun PatchNotesCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    shape = RoundedCornerShape(6.dp),
+                    shape = NewsTagShape,
                     color = iOSSystemGreen.copy(alpha = 0.15f)
                 ) {
                     Text(

@@ -60,27 +60,24 @@ fun ParticleCanvas(
     }
 
     val infiniteTransition = rememberInfiniteTransition(label = "particles_transition")
-    val animTime by if (!isPaused) {
-        infiniteTransition.animateFloat(
-            initialValue = 0f,
-            targetValue = 1f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = 24000, easing = LinearEasing),
-                repeatMode = RepeatMode.Restart
-            ),
-            label = "animTime"
-        )
-    } else {
-        remember { androidx.compose.runtime.mutableFloatStateOf(0.5f) }
-    }
+    val animProgress = infiniteTransition.animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(durationMillis = 24000, easing = LinearEasing),
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "animProgress"
+    )
 
-    // High-performance canvas without per-frame gradient allocations
+    // High-performance canvas without per-frame gradient allocations or composition invalidations
     Canvas(modifier = modifier.fillMaxSize()) {
+        if (isPaused) return@Canvas
         val width = size.width
         val height = size.height
         if (width <= 0 || height <= 0) return@Canvas
 
-        val progress = animTime
+        val progress = animProgress.value
 
         particles.forEachIndexed { index, p ->
             val currentYRatio = (p.yRatio + progress * p.speedY * 6f) % 1.0f

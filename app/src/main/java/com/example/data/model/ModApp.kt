@@ -1,10 +1,12 @@
 package com.example.data.model
 
+import androidx.compose.runtime.Immutable
 import com.google.firebase.Timestamp
 import com.google.firebase.firestore.DocumentId
 import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ServerTimestamp
 
+@Immutable
 data class ModApp(
     val id: String = "",
     val name: String = "",
@@ -29,6 +31,7 @@ data class ModApp(
     val sortOrder: Int = 0
 )
 
+@Immutable
 data class UserNotification(
     val id: String = "",
     val title: String = "",
@@ -38,6 +41,7 @@ data class UserNotification(
     val isActive: Boolean = true
 )
 
+@Immutable
 data class AppUpdateConfig(
     val storeLatestVersion: String = "1.0.0",
     val storeLatestVersionCode: Int = 1,
@@ -61,6 +65,7 @@ enum class DownloadStatus {
     FAILED
 }
 
+@Immutable
 data class DownloadTask(
     val id: String = "",
     val appId: String = "",
@@ -87,6 +92,7 @@ enum class NewsType {
     SPOTLIGHT
 }
 
+@Immutable
 data class NewsPost(
     val id: String = "",
     val title: String = "",
@@ -107,6 +113,7 @@ data class NewsPost(
     val sortOrder: Int = 0
 )
 
+@Immutable
 @IgnoreExtraProperties
 data class DeviceConfigItem(
     @DocumentId val id: String = "",
@@ -119,6 +126,7 @@ data class DeviceConfigItem(
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
 
+@Immutable
 @IgnoreExtraProperties
 data class UserDownloadRecord(
     @DocumentId val id: String = "",
@@ -131,6 +139,7 @@ data class UserDownloadRecord(
     @ServerTimestamp val updatedAt: Timestamp? = null
 )
 
+@Immutable
 @IgnoreExtraProperties
 data class UserBookmarkItem(
     @DocumentId val id: String = "",
@@ -140,6 +149,7 @@ data class UserBookmarkItem(
     @ServerTimestamp val createdAt: Timestamp? = null
 )
 
+@Immutable
 @IgnoreExtraProperties
 data class FeedbackReportItem(
     @DocumentId val id: String = "",

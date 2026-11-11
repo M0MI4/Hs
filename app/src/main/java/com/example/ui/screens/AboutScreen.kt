@@ -105,6 +105,7 @@ fun AboutScreen(
     onParticleDensityChanged: (ParticleDensity) -> Unit,
     onLanguageChanged: (AppLanguage) -> Unit,
     onSubmitFeedback: suspend (type: String, subject: String, details: String, deviceInfo: String) -> Result<String>,
+    onIsScrollingChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -114,6 +115,13 @@ fun AboutScreen(
     var tapCount by remember { mutableIntStateOf(0) }
     var lastTapTime by remember { mutableLongStateOf(0L) }
     var showAdminLoginSheet by remember { mutableStateOf(false) }
+
+    val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
+
+    // Smoothness: notify container when scrolling to pause background particle computations
+    androidx.compose.runtime.LaunchedEffect(lazyListState.isScrollInProgress) {
+        onIsScrollingChanged(lazyListState.isScrollInProgress)
+    }
 
     // When admin successfully logs in, dismiss the login sheet and open panel
     androidx.compose.runtime.LaunchedEffect(isAdminLoggedIn) {
@@ -150,13 +158,16 @@ fun AboutScreen(
     )
 
     LazyColumn(
+        state = lazyListState,
+        userScrollEnabled = true,
+        flingBehavior = androidx.compose.foundation.gestures.ScrollableDefaults.flingBehavior(),
         modifier = modifier
             .fillMaxSize()
             .testTag("about_screen"),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp)
     ) {
         // iOS Large Title Header
-        item {
+        item(key = "header_title", contentType = "header") {
             Column(modifier = Modifier.padding(vertical = 12.dp)) {
                 Text(
                     text = LocalizedStrings.get("settings_kicker", currentLanguage),
@@ -178,7 +189,7 @@ fun AboutScreen(
         }
 
         // Section 1: Language Switcher (English / Kurdish Sorani)
-        item {
+        item(key = "section_language", contentType = "settings_group") {
             Text(
                 text = LocalizedStrings.get("settings_language_section", currentLanguage),
                 style = MaterialTheme.typography.labelSmall.copy(
@@ -215,10 +226,8 @@ fun AboutScreen(
             Spacer(modifier = Modifier.height(20.dp))
         }
 
-
-
         // Section 3: Visual Experience & Particle Controls
-        item {
+        item(key = "section_appearance", contentType = "settings_group") {
             Text(
                 text = LocalizedStrings.get("settings_appearance_section", currentLanguage),
                 style = MaterialTheme.typography.labelSmall.copy(
@@ -333,7 +342,7 @@ fun AboutScreen(
         }
 
         // Section 4: Feedback & Support (Remote JSON Host sections removed as requested)
-        item {
+        item(key = "section_support", contentType = "settings_group") {
             Text(
                 text = LocalizedStrings.get("settings_support_section", currentLanguage),
                 style = MaterialTheme.typography.labelSmall.copy(
@@ -375,7 +384,7 @@ fun AboutScreen(
 
         // Section 4.5: Administrative Studio (Unlocked when Admin authenticated)
         if (isAdminLoggedIn) {
-            item {
+            item(key = "section_admin", contentType = "settings_group") {
                 Text(
                     text = "ADMINISTRATIVE STUDIO",
                     style = MaterialTheme.typography.labelSmall.copy(
@@ -403,7 +412,7 @@ fun AboutScreen(
         }
 
         // Section 5: Version History & Technical Specs
-        item {
+        item(key = "section_version", contentType = "settings_group") {
             Text(
                 text = LocalizedStrings.get("settings_about_section", currentLanguage),
                 style = MaterialTheme.typography.labelSmall.copy(
@@ -461,7 +470,7 @@ fun AboutScreen(
         }
 
         // Section 6: HAMA SADE TEAM Profile Banner
-        item {
+        item(key = "section_team", contentType = "team_banner") {
             Text(
                 text = LocalizedStrings.get("hama_sade_team_title", currentLanguage),
                 style = MaterialTheme.typography.labelSmall.copy(
@@ -472,6 +481,14 @@ fun AboutScreen(
                 ),
                 modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
             )
+
+            val avatarRequest = remember {
+                coil.request.ImageRequest.Builder(context)
+                    .data(com.example.R.drawable.hama_sade_avatar)
+                    .allowHardware(true)
+                    .crossfade(false)
+                    .build()
+            }
 
             CupertinoGroupedCard {
                 Column(
@@ -491,7 +508,7 @@ fun AboutScreen(
                             modifier = Modifier.size(68.dp)
                         ) {
                             coil.compose.AsyncImage(
-                                model = com.example.R.drawable.hama_sade_avatar,
+                                model = avatarRequest,
                                 contentDescription = "Hama Sade Avatar",
                                 modifier = Modifier
                                     .fillMaxSize()

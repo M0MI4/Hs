@@ -107,6 +107,9 @@ enum class MainTab(val title: String) {
     SETTINGS("Settings")
 }
 
+private val AdminBadgeShape = RoundedCornerShape(20.dp)
+private val NotificationBannerShape = RoundedCornerShape(16.dp)
+
 class MainActivity : ComponentActivity() {
 
     private val storeViewModel: StoreViewModel by viewModels()
@@ -241,13 +244,15 @@ fun MainAppContent(
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
             ) {
-            // Particle Canvas FX - paused during scrolls for maximum silky smoothness
-            ParticleCanvas(
-                enabled = particlesEnabled,
-                isPaused = isListScrolling,
-                density = particleDensity,
-                accentColor = themePreset.primaryColor
-            )
+            // Particle Canvas FX - completely unmounted when disabled or OFF, paused during scrolls
+            if (particlesEnabled && particleDensity != com.example.ui.components.ParticleDensity.OFF) {
+                ParticleCanvas(
+                    enabled = true,
+                    isPaused = isListScrolling,
+                    density = particleDensity,
+                    accentColor = themePreset.primaryColor
+                )
+            }
 
             Scaffold(
                 containerColor = Color.Transparent,
@@ -398,7 +403,8 @@ fun MainAppContent(
                                 if (res.isFailure) {
                                     Toast.makeText(context, "Installer: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
                                 }
-                            }
+                            },
+                            onIsScrollingChanged = { isListScrolling = it }
                         )
 
                         MainTab.SETTINGS -> AboutScreen(
@@ -420,7 +426,8 @@ fun MainAppContent(
                             onLanguageChanged = { settingsViewModel.setLanguage(it) },
                             onSubmitFeedback = { type, subject, details, deviceInfo ->
                                 settingsViewModel.submitFeedback(type, subject, details, deviceInfo)
-                            }
+                            },
+                            onIsScrollingChanged = { isListScrolling = it }
                         )
                     }
 
@@ -436,7 +443,7 @@ fun MainAppContent(
                     ) {
                         activeNotification?.let { notif ->
                             Card(
-                                shape = RoundedCornerShape(16.dp),
+                                shape = NotificationBannerShape,
                                 colors = CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
                                 ),
@@ -566,7 +573,7 @@ fun MainAppContent(
             if (adminState.isAdminLoggedIn) {
                 Surface(
                     onClick = { showAdminPanel = true },
-                    shape = RoundedCornerShape(20.dp),
+                    shape = AdminBadgeShape,
                     color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
                     border = BorderStroke(1.dp, VerifiedBadgeGreen.copy(alpha = 0.8f)),
                     shadowElevation = 8.dp,

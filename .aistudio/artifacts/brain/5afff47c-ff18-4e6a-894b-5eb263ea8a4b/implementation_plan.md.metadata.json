@@ -1,6 +1,0 @@
-{
-  "summary":  "Implementation plan to add custom 3-line drag reordering for apps and news with hold-and-drag gesture, remove the Discord button, add an in-app Admin notification broadcast feature with Android system notifications for permitted users, and optimize scroll performance by pausing background particles during list scrolling and caching drawing assets.",
-  "updatedAt":  "2026-11-11T11:00:02.383639315Z",
-  "requestFeedback":  true,
-  "userFacing":  true
-}

@@ -20,11 +20,17 @@ jobs:
         mkdir -p app
         echo '{"project_info":{"project_number":"1","project_id":"dummy"},"client":[{"client_info":{"mobilesdk_app_id":"1:1:android:1","android_client_info":{"package_name":"com.aistudio.hsstore.modapk"}},"oauth_client":[{"client_id":"dummy-web-client-id.apps.googleusercontent.com","client_type":3}],"api_key":[{"current_key":"dummy"}]}]}' > app/google-services.json
         
-    - name: Build APK
-      run: gradle assembleDebug
+    - name: Build Debug & Release APKs
+      run: gradle assembleDebug assembleRelease
       
-    - name: Upload APK
+    - name: Upload Debug APK
       uses: actions/upload-artifact@v4
       with:
-        name: HsStore-APK
+        name: HsStore-Debug-APK
         path: app/build/outputs/apk/debug/app-debug.apk
+
+    - name: Upload Optimized Release APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: HsStore-Release-APK
+        path: app/build/outputs/apk/release/app-release.apk
