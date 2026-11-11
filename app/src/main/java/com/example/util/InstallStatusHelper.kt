@@ -77,33 +77,31 @@ object InstallStatusHelper {
         // Trigger asynchronous full cache population if not already started
         preloadInstalledPackages(context)
 
-        // Fallback for first query before batch completes
-        return try {
-            val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                context.packageManager.getPackageInfo(
-                    packageName,
-                    PackageManager.PackageInfoFlags.of(0)
-                )
-            } else {
-                @Suppress("DEPRECATION")
-                context.packageManager.getPackageInfo(packageName, 0)
-            }
+        // Asynchronous non-blocking lookup to guarantee 60-120fps smooth scrolling
+        scope.launch {
+            try {
+                val pInfo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    context.applicationContext.packageManager.getPackageInfo(
+                        packageName,
+                        PackageManager.PackageInfoFlags.of(0)
+                    )
+                } else {
+                    @Suppress("DEPRECATION")
+                    context.applicationContext.packageManager.getPackageInfo(packageName, 0)
+                }
 
-            val installedVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                pInfo.longVersionCode.toInt()
-            } else {
-                @Suppress("DEPRECATION")
-                pInfo.versionCode
-            }
-
-            installedPackagesCache[packageName] = installedVersionCode
-            if (installedVersionCode < remoteVersionCode) AppInstallState.UPDATE else AppInstallState.OPEN
-        } catch (e: PackageManager.NameNotFoundException) {
-            installedPackagesCache[packageName] = -1
-            AppInstallState.GET
-        } catch (e: Exception) {
-            AppInstallState.GET
+                val installedVersionCode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                    pInfo.longVersionCode.toInt()
+                } else {
+                    @Suppress("DEPRECATION")
+                    pInfo.versionCode
+                }
+                installedPackagesCache[packageName] = installedVersionCode
+            } catch (e: PackageManager.NameNotFoundException) {
+                installedPackagesCache[packageName] = -1
+            } catch (_: Exception) {}
         }
+        return AppInstallState.GET
     }
 
     fun updateInstalledPackage(packageName: String, versionCode: Int) {

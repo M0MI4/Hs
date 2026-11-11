@@ -77,7 +77,7 @@ fun ModAppCard(
             0.5.dp,
             MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)
         ),
-        shadowElevation = 0.5.dp,
+        shadowElevation = 0.dp,
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))

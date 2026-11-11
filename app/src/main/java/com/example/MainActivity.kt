@@ -1,18 +1,30 @@
 package com.example
 
+import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -26,13 +38,22 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.ui.zIndex
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
@@ -155,6 +176,20 @@ fun MainAppContent(
     val selectedAppForDetail by storeViewModel.selectedAppForDetail.collectAsState()
     val showUpdateDialog by storeViewModel.showUpdateDialog.collectAsState()
     val bookmarkedAppIds by storeViewModel.bookmarkedAppIds.collectAsState()
+    val activeNotification by storeViewModel.activeNotification.collectAsState()
+
+    var isListScrolling by remember { mutableStateOf(false) }
+
+    // Android 13+ Notification Permission Launcher
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { _ -> }
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // Downloads States from DownloadsViewModel
     val downloadTasks by downloadsViewModel.tasks.collectAsState()
@@ -206,9 +241,10 @@ fun MainAppContent(
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
             ) {
-            // Particle Canvas FX
+            // Particle Canvas FX - paused during scrolls for maximum silky smoothness
             ParticleCanvas(
                 enabled = particlesEnabled,
+                isPaused = isListScrolling,
                 density = particleDensity,
                 accentColor = themePreset.primaryColor
             )
@@ -318,7 +354,9 @@ fun MainAppContent(
                             },
                             onNavigateToApps = {
                                 settingsViewModel.setTab(MainTab.APPS)
-                            }
+                            },
+                            onReorderNews = { from, to -> storeViewModel.reorderNews(from, to) },
+                            onIsScrollingChanged = { isListScrolling = it }
                         )
 
                         MainTab.APPS -> AppsScreen(
@@ -342,7 +380,9 @@ fun MainAppContent(
                                 storeViewModel.toggleBookmark(app, currentUser) { msg ->
                                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                 }
-                            }
+                            },
+                            onReorderApps = { from, to -> storeViewModel.reorderApps(from, to) },
+                            onIsScrollingChanged = { isListScrolling = it }
                         )
 
                         MainTab.DOWNLOADS -> DownloadsScreen(
@@ -382,6 +422,104 @@ fun MainAppContent(
                                 settingsViewModel.submitFeedback(type, subject, details, deviceInfo)
                             }
                         )
+                    }
+
+                    // Floating In-App Broadcast Notification Banner
+                    AnimatedVisibility(
+                        visible = activeNotification != null,
+                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .zIndex(10f)
+                    ) {
+                        activeNotification?.let { notif ->
+                            Card(
+                                shape = RoundedCornerShape(16.dp),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f)
+                                ),
+                                border = BorderStroke(1.dp, com.example.ui.theme.iOSSystemBlue.copy(alpha = 0.6f)),
+                                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Surface(
+                                        shape = CircleShape,
+                                        color = com.example.ui.theme.iOSSystemBlue.copy(alpha = 0.15f),
+                                        modifier = Modifier.size(36.dp)
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Campaign,
+                                                contentDescription = null,
+                                                tint = com.example.ui.theme.iOSSystemBlue,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(10.dp))
+
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = notif.title,
+                                            style = MaterialTheme.typography.titleSmall.copy(
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        )
+                                        Text(
+                                            text = notif.message,
+                                            style = MaterialTheme.typography.bodySmall.copy(
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                fontSize = 12.sp
+                                            ),
+                                            maxLines = 2
+                                        )
+                                    }
+
+                                    if (notif.actionUrl.isNotBlank()) {
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Button(
+                                            onClick = {
+                                                try {
+                                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse(notif.actionUrl))
+                                                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                                    context.startActivity(intent)
+                                                } catch (_: Exception) {}
+                                            },
+                                            shape = RoundedCornerShape(16.dp),
+                                            colors = ButtonDefaults.buttonColors(containerColor = com.example.ui.theme.iOSSystemBlue),
+                                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                            modifier = Modifier.height(32.dp)
+                                        ) {
+                                            Text("View", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        }
+                                    }
+
+                                    Spacer(modifier = Modifier.width(4.dp))
+
+                                    IconButton(
+                                        onClick = { storeViewModel.dismissNotification() },
+                                        modifier = Modifier.size(28.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Dismiss",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

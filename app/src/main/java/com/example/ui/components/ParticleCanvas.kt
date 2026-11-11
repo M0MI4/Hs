@@ -14,15 +14,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import kotlin.random.Random
 
 enum class ParticleDensity(val count: Int, val label: String) {
     OFF(0, "Disabled"),
-    SUBTLE(15, "Subtle"),
-    MEDIUM(30, "Medium"),
-    DENSE(55, "Dense")
+    SUBTLE(12, "Subtle"),
+    MEDIUM(24, "Medium"),
+    DENSE(40, "Dense")
 }
 
 private data class Particle(
@@ -39,7 +38,8 @@ private data class Particle(
 fun ParticleCanvas(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    density: ParticleDensity = ParticleDensity.MEDIUM,
+    isPaused: Boolean = false,
+    density: ParticleDensity = ParticleDensity.SUBTLE,
     accentColor: Color = MaterialTheme.colorScheme.primary
 ) {
     if (!enabled || density == ParticleDensity.OFF) return
@@ -50,63 +50,59 @@ fun ParticleCanvas(
             Particle(
                 xRatio = random.nextFloat(),
                 yRatio = random.nextFloat(),
-                baseRadius = random.nextFloat() * 4f + 2f,
-                speedY = -(random.nextFloat() * 0.08f + 0.03f),
-                speedX = (random.nextFloat() - 0.5f) * 0.04f,
-                maxAlpha = random.nextFloat() * 0.45f + 0.2f,
-                pulseSpeed = random.nextFloat() * 2f + 1f
+                baseRadius = random.nextFloat() * 3f + 1.5f,
+                speedY = -(random.nextFloat() * 0.05f + 0.02f),
+                speedX = (random.nextFloat() - 0.5f) * 0.03f,
+                maxAlpha = random.nextFloat() * 0.35f + 0.15f,
+                pulseSpeed = random.nextFloat() * 1.5f + 0.8f
             )
         }
     }
 
     val infiniteTransition = rememberInfiniteTransition(label = "particles_transition")
-    val animTime by infiniteTransition.animateFloat(
-        initialValue = 0f,
-        targetValue = 1f,
-        animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = 20000, easing = LinearEasing),
-            repeatMode = RepeatMode.Restart
-        ),
-        label = "animTime"
-    )
+    val animTime by if (!isPaused) {
+        infiniteTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 1f,
+            animationSpec = infiniteRepeatable(
+                animation = tween(durationMillis = 24000, easing = LinearEasing),
+                repeatMode = RepeatMode.Restart
+            ),
+            label = "animTime"
+        )
+    } else {
+        remember { androidx.compose.runtime.mutableFloatStateOf(0.5f) }
+    }
 
+    // High-performance canvas without per-frame gradient allocations
     Canvas(modifier = modifier.fillMaxSize()) {
         val width = size.width
         val height = size.height
         if (width <= 0 || height <= 0) return@Canvas
 
+        val progress = animTime
+
         particles.forEachIndexed { index, p ->
-            // Update position relative to progress
-            val currentYRatio = (p.yRatio + animTime * p.speedY * 8f) % 1.0f
+            val currentYRatio = (p.yRatio + progress * p.speedY * 6f) % 1.0f
             val finalY = (if (currentYRatio < 0) currentYRatio + 1.0f else currentYRatio) * height
 
-            val currentXRatio = (p.xRatio + animTime * p.speedX * 6f) % 1.0f
+            val currentXRatio = (p.xRatio + progress * p.speedX * 4f) % 1.0f
             val finalX = (if (currentXRatio < 0) currentXRatio + 1.0f else currentXRatio) * width
 
-            // Alpha pulsing
-            val pulse = (Math.sin((animTime * 20.0 * p.pulseSpeed) + index).toFloat() + 1f) / 2f
-            val currentAlpha = (p.maxAlpha * (0.6f + 0.4f * pulse)).coerceIn(0.05f, 0.8f)
+            val pulse = (Math.sin((progress * 15.0 * p.pulseSpeed) + index).toFloat() + 1f) / 2f
+            val currentAlpha = (p.maxAlpha * (0.5f + 0.5f * pulse)).coerceIn(0.04f, 0.6f)
+            val center = Offset(finalX, finalY)
 
-            // Draw outer neon halo
+            // Ultra-lightweight 2-pass drawing (no shader allocations)
             drawCircle(
-                brush = Brush.radialGradient(
-                    colors = listOf(
-                        accentColor.copy(alpha = currentAlpha),
-                        accentColor.copy(alpha = currentAlpha * 0.3f),
-                        Color.Transparent
-                    ),
-                    center = Offset(finalX, finalY),
-                    radius = p.baseRadius * 3.5f
-                ),
-                radius = p.baseRadius * 3.5f,
-                center = Offset(finalX, finalY)
+                color = accentColor.copy(alpha = currentAlpha * 0.25f),
+                radius = p.baseRadius * 3.0f,
+                center = center
             )
-
-            // Draw bright glowing core
             drawCircle(
-                color = Color.White.copy(alpha = (currentAlpha * 1.2f).coerceAtMost(0.9f)),
-                radius = p.baseRadius * 0.7f,
-                center = Offset(finalX, finalY)
+                color = Color.White.copy(alpha = (currentAlpha * 0.85f).coerceAtMost(0.7f)),
+                radius = p.baseRadius * 0.75f,
+                center = center
             )
         }
     }

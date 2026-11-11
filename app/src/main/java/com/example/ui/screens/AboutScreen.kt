@@ -366,19 +366,6 @@ fun AboutScreen(
                         context.startActivity(intent)
                     },
                     showChevron = true,
-                    showDivider = true
-                )
-
-                CupertinoSettingsRow(
-                    title = "Discord Support Server",
-                    subtitle = "Live bug reporting & mod submissions",
-                    icon = Icons.Default.Group,
-                    iconBgColor = iOSSystemIndigo,
-                    onClick = {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://discord.gg/hsstore"))
-                        context.startActivity(intent)
-                    },
-                    showChevron = true,
                     showDivider = false
                 )
             }

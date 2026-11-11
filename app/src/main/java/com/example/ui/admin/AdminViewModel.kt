@@ -11,6 +11,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.AppUpdateConfig
 import com.example.data.model.ModApp
 import com.example.data.model.NewsPost
+import com.example.data.model.UserNotification
 import com.example.data.repository.CatalogRepository
 import com.example.data.repository.NewsRepository
 import com.example.data.repository.UpdateRepository
@@ -118,47 +119,83 @@ class AdminViewModel(
             return
         }
 
-        // Recognized store administrator emails
-        val isRecognizedAdmin = normalizedEmail.equals("momiadesigner@gmail.com", ignoreCase = true) ||
-                                normalizedEmail.equals("f4illed2@gmail.com", ignoreCase = true) ||
-                                normalizedEmail.equals("admin@hsstore.com", ignoreCase = true) ||
-                                normalizedEmail.contains("admin", ignoreCase = true)
-
-        val authInstance = auth ?: getAuthInstance()
-        if (authInstance == null) {
-            if (isRecognizedAdmin) {
-                saveAdminLocalSession(normalizedEmail)
-                _adminState.value = _adminState.value.copy(
-                    isAdminLoggedIn = true,
-                    currentAdminEmail = normalizedEmail,
-                    isLoading = false,
-                    successMessage = "Welcome, Administrator ($normalizedEmail)"
-                )
-                return
-            }
-            _adminState.value = _adminState.value.copy(
-                errorMessage = "Firebase Authentication is not initialized."
-            )
-            return
-        }
+        // Authorized store administrator emails
+        val isRecognizedAdminEmail = normalizedEmail.equals("momiadesigner@gmail.com", ignoreCase = true) ||
+                                    normalizedEmail.equals("f4illed2@gmail.com", ignoreCase = true) ||
+                                    normalizedEmail.equals("admin@hsstore.com", ignoreCase = true)
 
         viewModelScope.launch {
             _adminState.value = _adminState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
-            authInstance.signInWithEmailAndPassword(normalizedEmail, trimmedPass)
-                .addOnSuccessListener { result ->
-                    val emailStr = result.user?.email ?: normalizedEmail
-                    saveAdminLocalSession(emailStr)
+
+            val authInstance = auth ?: getAuthInstance()
+            if (authInstance != null) {
+                authInstance.signInWithEmailAndPassword(normalizedEmail, trimmedPass)
+                    .addOnSuccessListener { result ->
+                        val emailStr = result.user?.email ?: normalizedEmail
+                        saveAdminLocalSession(emailStr)
+                        _adminState.value = _adminState.value.copy(
+                            isAdminLoggedIn = true,
+                            currentAdminEmail = emailStr,
+                            isLoading = false,
+                            successMessage = "Welcome, Administrator ($emailStr)"
+                        )
+                    }
+                    .addOnFailureListener { ex ->
+                        val errMsg = ex.localizedMessage ?: ""
+                        // If device has Google API key restriction [API key not valid], verify with Firebase REST API
+                        if (errMsg.contains("API key not valid", ignoreCase = true)) {
+                            viewModelScope.launch {
+                                val restResult = verifyWithFirebaseRest(normalizedEmail, trimmedPass)
+                                if (restResult.isSuccess) {
+                                    val verifiedEmail = restResult.getOrNull() ?: normalizedEmail
+                                    saveAdminLocalSession(verifiedEmail)
+                                    _adminState.value = _adminState.value.copy(
+                                        isAdminLoggedIn = true,
+                                        currentAdminEmail = verifiedEmail,
+                                        isLoading = false,
+                                        successMessage = "Welcome, Administrator ($verifiedEmail)"
+                                    )
+                                } else {
+                                    // Check if emergency master admin passcode is used by recognized admin
+                                    val isEmergencyPass = isRecognizedAdminEmail && (trimmedPass == "hsstore2026" || trimmedPass == "admin2026")
+                                    if (isEmergencyPass) {
+                                        saveAdminLocalSession(normalizedEmail)
+                                        _adminState.value = _adminState.value.copy(
+                                            isAdminLoggedIn = true,
+                                            currentAdminEmail = normalizedEmail,
+                                            isLoading = false,
+                                            successMessage = "Welcome, Administrator ($normalizedEmail)"
+                                        )
+                                    } else {
+                                        _adminState.value = _adminState.value.copy(
+                                            isLoading = false,
+                                            errorMessage = restResult.exceptionOrNull()?.localizedMessage ?: "Invalid email or password."
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            _adminState.value = _adminState.value.copy(
+                                isLoading = false,
+                                errorMessage = ex.localizedMessage ?: "Admin authentication failed. Check credentials."
+                            )
+                        }
+                    }
+            } else {
+                // Auth instance is null, try direct REST verification
+                val restResult = verifyWithFirebaseRest(normalizedEmail, trimmedPass)
+                if (restResult.isSuccess) {
+                    val verifiedEmail = restResult.getOrNull() ?: normalizedEmail
+                    saveAdminLocalSession(verifiedEmail)
                     _adminState.value = _adminState.value.copy(
                         isAdminLoggedIn = true,
-                        currentAdminEmail = emailStr,
+                        currentAdminEmail = verifiedEmail,
                         isLoading = false,
-                        successMessage = "Welcome, Administrator ($emailStr)"
+                        successMessage = "Welcome, Administrator ($verifiedEmail)"
                     )
-                }
-                .addOnFailureListener { ex ->
-                    val errMsg = ex.localizedMessage ?: ""
-                    // If device is blocked by Google API key restriction or recognized admin account
-                    if (errMsg.contains("API key not valid", ignoreCase = true) || isRecognizedAdmin) {
+                } else {
+                    val isEmergencyPass = isRecognizedAdminEmail && (trimmedPass == "hsstore2026" || trimmedPass == "admin2026")
+                    if (isEmergencyPass) {
                         saveAdminLocalSession(normalizedEmail)
                         _adminState.value = _adminState.value.copy(
                             isAdminLoggedIn = true,
@@ -169,10 +206,48 @@ class AdminViewModel(
                     } else {
                         _adminState.value = _adminState.value.copy(
                             isLoading = false,
-                            errorMessage = ex.localizedMessage ?: "Admin authentication failed. Check credentials."
+                            errorMessage = restResult.exceptionOrNull()?.localizedMessage ?: "Invalid email or password."
                         )
                     }
                 }
+            }
+        }
+    }
+
+    private suspend fun verifyWithFirebaseRest(email: String, pass: String): Result<String> = withContext(Dispatchers.IO) {
+        runCatching {
+            val apiKey = "AIzaSyBmICOtRuZItfGSX2AzS1QcdpuwhdYvvsg"
+            val url = java.net.URL("https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=$apiKey")
+            val conn = url.openConnection() as java.net.HttpURLConnection
+            conn.requestMethod = "POST"
+            conn.setRequestProperty("Content-Type", "application/json; charset=UTF-8")
+            conn.doOutput = true
+            conn.connectTimeout = 8000
+            conn.readTimeout = 8000
+
+            val payload = org.json.JSONObject().apply {
+                put("email", email)
+                put("password", pass)
+                put("returnSecureToken", true)
+            }.toString()
+
+            conn.outputStream.use { os ->
+                os.write(payload.toByteArray(Charsets.UTF_8))
+            }
+
+            val responseCode = conn.responseCode
+            if (responseCode == 200) {
+                val responseText = conn.inputStream.bufferedReader().use { it.readText() }
+                val json = org.json.JSONObject(responseText)
+                json.optString("email", email)
+            } else {
+                val errorText = conn.errorStream?.bufferedReader()?.use { it.readText() } ?: ""
+                if (errorText.contains("INVALID_LOGIN_CREDENTIALS") || errorText.contains("EMAIL_NOT_FOUND") || errorText.contains("INVALID_PASSWORD")) {
+                    throw IllegalArgumentException("Invalid administrator credentials. Incorrect email or password.")
+                } else {
+                    throw IllegalStateException("Authentication failed: Incorrect email or password.")
+                }
+            }
         }
     }
 
@@ -271,6 +346,52 @@ class AdminViewModel(
                 )
             }
         }
+    }
+
+    fun broadcastNotification(title: String, message: String, actionUrl: String = "", onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            _adminState.value = _adminState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
+            val notif = UserNotification(
+                title = title.trim(),
+                message = message.trim(),
+                actionUrl = actionUrl.trim(),
+                isActive = true
+            )
+            val res = updateRepository.broadcastNotification(notif)
+            if (res.isSuccess) {
+                _adminState.value = _adminState.value.copy(
+                    isLoading = false,
+                    successMessage = "Broadcast notification sent to all users!"
+                )
+                onComplete()
+            } else {
+                _adminState.value = _adminState.value.copy(
+                    isLoading = false,
+                    errorMessage = res.exceptionOrNull()?.localizedMessage ?: "Failed to broadcast notification"
+                )
+            }
+        }
+    }
+
+    fun clearActiveNotification(onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            _adminState.value = _adminState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
+            val res = updateRepository.clearActiveNotification()
+            _adminState.value = _adminState.value.copy(
+                isLoading = false,
+                successMessage = if (res.isSuccess) "Active notification cleared." else null,
+                errorMessage = res.exceptionOrNull()?.localizedMessage
+            )
+            if (res.isSuccess) onComplete()
+        }
+    }
+
+    fun reorderApps(fromIndex: Int, toIndex: Int) {
+        catalogRepository.reorderApps(fromIndex, toIndex)
+    }
+
+    fun reorderNews(fromIndex: Int, toIndex: Int) {
+        newsRepository.reorderNews(fromIndex, toIndex)
     }
 
     /**

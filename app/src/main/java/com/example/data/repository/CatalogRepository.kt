@@ -123,6 +123,8 @@ class CatalogRepository(
         startRealtimeFirestoreSync()
     }
 
+    private val repoPrefs = context.getSharedPreferences("hsstore_catalog_prefs", Context.MODE_PRIVATE)
+
     private fun startRealtimeFirestoreSync() {
         scope.launch {
             _isLoading.value = true
@@ -139,24 +141,37 @@ class CatalogRepository(
                 } ?: emptyList()
 
                 if (remoteApps.isNotEmpty()) {
-                    _firestoreApps.value = remoteApps
+                    repoPrefs.edit().putBoolean("catalog_has_seeded", true).apply()
+                    val orderedApps = applyCustomOrder(remoteApps)
+                    _firestoreApps.value = orderedApps
                     _currentSource.value = CatalogSource.FIRESTORE_LIVE
-                    _statusMessage.value = "Live sync: ${remoteApps.size} apps from Cloud Firestore"
+                    _statusMessage.value = "Live sync: ${orderedApps.size} apps from Cloud Firestore"
 
                     // Cache to Room in background
                     scope.launch {
                         try {
-                            val entities = remoteApps.map { ModAppEntity.fromDomain(it) }
+                            val entities = orderedApps.map { ModAppEntity.fromDomain(it) }
                             modAppDao.insertApps(entities)
                         } catch (e: Exception) {
                             Log.w("CatalogRepo", "Room persistence warning: ${e.message}")
                         }
                     }
                 } else {
-                    // Firestore /apps collection is empty -> Auto-seed from bundled mod_catalog.json
-                    Log.i("CatalogRepo", "Firestore /apps is empty. Initiating initial auto-seed...")
-                    scope.launch {
-                        autoSeedFirestoreFromBundledCatalog()
+                    val alreadySeeded = repoPrefs.getBoolean("catalog_has_seeded", false)
+                    if (alreadySeeded) {
+                        // Admin intentionally deleted apps or catalog is empty; do NOT re-seed
+                        _firestoreApps.value = emptyList()
+                        _statusMessage.value = "Store catalog is empty (0 apps)"
+                        scope.launch {
+                            try { modAppDao.clearAll() } catch (_: Exception) {}
+                        }
+                    } else {
+                        // First run initialization only
+                        Log.i("CatalogRepo", "First startup: Seeding bundled apps to Firestore...")
+                        repoPrefs.edit().putBoolean("catalog_has_seeded", true).apply()
+                        scope.launch {
+                            autoSeedFirestoreFromBundledCatalog()
+                        }
                     }
                 }
             }
@@ -225,24 +240,37 @@ class CatalogRepository(
     suspend fun deleteApp(appId: String): Result<Unit> = runCatching {
         appsCollection.document(appId).delete().await()
         modAppDao.deleteAppById(appId)
+        _firestoreApps.value = _firestoreApps.value.filter { it.id != appId }
     }
 
     suspend fun syncWithRetrofit(customUrl: String? = null): RemoteSyncResult {
+        _isLoading.value = true
         return try {
-            val count = _firestoreApps.value.size
+            val snapshot = appsCollection
+                .orderBy("downloadsCount", Query.Direction.DESCENDING)
+                .get()
+                .await()
+            val remoteApps = snapshot.documents.mapNotNull { doc ->
+                doc.toObject(ModApp::class.java)?.copy(id = doc.id)
+            }
+            _firestoreApps.value = remoteApps
+            _currentSource.value = CatalogSource.FIRESTORE_LIVE
+            _statusMessage.value = "Live sync: ${remoteApps.size} apps from Cloud Firestore"
             RemoteSyncResult(
                 success = true,
                 source = _currentSource.value,
-                count = count,
-                message = "Firestore synchronized ($count apps active)"
+                count = remoteApps.size,
+                message = "Firestore synchronized (${remoteApps.size} apps active)"
             )
         } catch (e: Exception) {
             RemoteSyncResult(
                 success = false,
-                source = CatalogSource.LOCAL_CACHE,
+                source = _currentSource.value,
                 count = _firestoreApps.value.size,
                 message = "Sync failed: ${e.localizedMessage}"
             )
+        } finally {
+            _isLoading.value = false
         }
     }
 
@@ -291,6 +319,45 @@ class CatalogRepository(
             SortOption.RATING -> result.sortedByDescending { it.rating }
             SortOption.SIZE -> result.sortedBy { it.sizeBytes }
             SortOption.RECENT -> result.sortedByDescending { it.versionCode }
+        }
+    }
+
+    fun applyCustomOrder(appsList: List<ModApp>): List<ModApp> {
+        val savedOrderStr = repoPrefs.getString("custom_app_order_ids", null)
+        if (savedOrderStr.isNullOrBlank()) {
+            return appsList.sortedBy { it.sortOrder }
+        }
+        val orderedIds = savedOrderStr.split(",").filter { it.isNotBlank() }
+        if (orderedIds.isEmpty()) return appsList.sortedBy { it.sortOrder }
+
+        val idToIndex = orderedIds.withIndex().associate { it.value to it.index }
+        return appsList.sortedBy { idToIndex[it.id] ?: (10000 + it.sortOrder) }
+    }
+
+    fun reorderApps(fromIndex: Int, toIndex: Int) {
+        val currentList = _firestoreApps.value.toMutableList()
+        if (fromIndex in currentList.indices && toIndex in currentList.indices) {
+            val item = currentList.removeAt(fromIndex)
+            currentList.add(toIndex, item)
+            _firestoreApps.value = currentList
+            saveCustomOrder(currentList)
+        }
+    }
+
+    fun saveCustomOrder(appsList: List<ModApp>) {
+        _firestoreApps.value = appsList
+        val ids = appsList.joinToString(",") { it.id }
+        repoPrefs.edit().putString("custom_app_order_ids", ids).apply()
+        scope.launch {
+            try {
+                appsList.forEachIndexed { index, app ->
+                    if (app.id.isNotBlank()) {
+                        appsCollection.document(app.id).update("sortOrder", index)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("CatalogRepo", "Failed to sync sortOrder to Firestore: ${e.message}")
+            }
         }
     }
 }

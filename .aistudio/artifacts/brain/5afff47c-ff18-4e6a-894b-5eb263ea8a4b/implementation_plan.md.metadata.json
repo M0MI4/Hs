@@ -1,6 +1,6 @@
 {
-  "summary":  "Comprehensive implementation plan to transition HsStore from external Pastebin/raw JSON syncing to a real-time Firestore backend with a hidden in-app Admin Studio, discrete 5-tap Cupertino login flow, local APK metadata parser, and zero-login frictionless access for general users.",
-  "updatedAt":  "2026-11-10T16:56:01.432597026Z",
+  "summary":  "Implementation plan to add custom 3-line drag reordering for apps and news with hold-and-drag gesture, remove the Discord button, add an in-app Admin notification broadcast feature with Android system notifications for permitted users, and optimize scroll performance by pausing background particles during list scrolling and caching drawing assets.",
+  "updatedAt":  "2026-11-11T11:00:02.383639315Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

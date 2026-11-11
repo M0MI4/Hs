@@ -37,7 +37,12 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -324,6 +329,7 @@ fun CupertinoSearchField(
 
 /**
  * iOS / Cupertino Pull-To-Refresh Container
+ * Automatically manages internal animation cycle to ensure the refresh indicator never gets stuck.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -333,9 +339,23 @@ fun CupertinoPullToRefreshBox(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit
 ) {
+    var internalRefreshing by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val isCurrentlyRefreshing = isRefreshing || internalRefreshing
+
     PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = onRefresh,
+        isRefreshing = isCurrentlyRefreshing,
+        onRefresh = {
+            scope.launch {
+                internalRefreshing = true
+                try {
+                    onRefresh()
+                } finally {
+                    delay(600)
+                    internalRefreshing = false
+                }
+            }
+        },
         modifier = modifier
     ) {
         content()

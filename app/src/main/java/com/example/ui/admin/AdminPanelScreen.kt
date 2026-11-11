@@ -22,8 +22,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -34,12 +36,18 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Logout
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.NotificationsOff
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.SwapVert
 import androidx.compose.material.icons.filled.SystemUpdate
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -65,6 +73,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -74,6 +83,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
@@ -249,7 +259,8 @@ fun AdminPanelScreen(
                         editingApp = null
                         showAppEditorSheet = true
                     },
-                    onDeleteApp = { appToDelete = it }
+                    onDeleteApp = { appToDelete = it },
+                    onReorderApps = { from, to -> adminViewModel.reorderApps(from, to) }
                 )
                 1 -> NewsManagementView(
                     newsList = newsList,
@@ -261,12 +272,19 @@ fun AdminPanelScreen(
                         editingNews = null
                         showNewsEditorSheet = true
                     },
-                    onDeleteNews = { newsToDelete = it }
+                    onDeleteNews = { newsToDelete = it },
+                    onReorderNews = { from, to -> adminViewModel.reorderNews(from, to) }
                 )
                 2 -> StoreConfigView(
                     currentConfig = updateConfig ?: AppUpdateConfig(),
                     isLoading = adminState.isLoading,
-                    onSaveConfig = { cfg -> adminViewModel.saveStoreConfig(cfg) }
+                    onSaveConfig = { cfg -> adminViewModel.saveStoreConfig(cfg) },
+                    onBroadcastNotification = { title, msg, link ->
+                        adminViewModel.broadcastNotification(title, msg, link)
+                    },
+                    onClearNotification = {
+                        adminViewModel.clearActiveNotification()
+                    }
                 )
             }
         }
@@ -279,6 +297,16 @@ fun AdminPanelScreen(
             adminViewModel = adminViewModel,
             onDismiss = { showAppEditorSheet = false },
             onSaved = { showAppEditorSheet = false }
+        )
+    }
+
+    // News Editor Modal Sheet
+    if (showNewsEditorSheet) {
+        NewsEditorBottomSheet(
+            news = editingNews,
+            adminViewModel = adminViewModel,
+            onDismiss = { showNewsEditorSheet = false },
+            onSaved = { showNewsEditorSheet = false }
         )
     }
 
@@ -341,9 +369,12 @@ private fun AppsManagementView(
     apps: List<ModApp>,
     onEditApp: (ModApp) -> Unit,
     onCreateApp: () -> Unit,
-    onDeleteApp: (ModApp) -> Unit
+    onDeleteApp: (ModApp) -> Unit,
+    onReorderApps: (Int, Int) -> Unit = { _, _ -> }
 ) {
     var searchQuery by remember { mutableStateOf("") }
+    var isOrderEditing by remember { mutableStateOf(false) }
+
     val filteredApps = remember(apps, searchQuery) {
         if (searchQuery.isBlank()) apps
         else {
@@ -373,19 +404,45 @@ private fun AppsManagementView(
                     )
                 )
 
-                Button(
-                    onClick = onCreateApp,
-                    shape = RoundedCornerShape(20.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "New App",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("New App", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(
+                        onClick = { isOrderEditing = !isOrderEditing },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = if (isOrderEditing) VerifiedBadgeGreen else MaterialTheme.colorScheme.primary
+                        ),
+                        border = BorderStroke(1.dp, if (isOrderEditing) VerifiedBadgeGreen else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isOrderEditing) Icons.Default.CheckCircle else Icons.Default.SwapVert,
+                            contentDescription = "Edit Order",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isOrderEditing) "Done" else "Edit Order",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Button(
+                        onClick = onCreateApp,
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "New App",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("New App", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
                 }
             }
 
@@ -419,14 +476,20 @@ private fun AppsManagementView(
                 }
             }
         } else {
-            items(
+            itemsIndexed(
                 items = filteredApps,
-                key = { it.id.ifBlank { it.packageName } }
-            ) { app ->
+                key = { _, app -> app.id.ifBlank { app.packageName } }
+            ) { index, app ->
                 AdminAppItemCard(
                     app = app,
+                    index = index,
+                    totalCount = filteredApps.size,
+                    isOrderEditing = isOrderEditing && searchQuery.isBlank(),
                     onEdit = { onEditApp(app) },
-                    onDelete = { onDeleteApp(app) }
+                    onDelete = { onDeleteApp(app) },
+                    onMoveUp = { if (index > 0) onReorderApps(index, index - 1) },
+                    onMoveDown = { if (index < filteredApps.size - 1) onReorderApps(index, index + 1) },
+                    onReorder = onReorderApps
                 )
                 Spacer(modifier = Modifier.height(8.dp))
             }
@@ -437,13 +500,21 @@ private fun AppsManagementView(
 @Composable
 private fun AdminAppItemCard(
     app: ModApp,
+    index: Int,
+    totalCount: Int,
+    isOrderEditing: Boolean,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onMoveUp: () -> Unit,
+    onMoveDown: () -> Unit,
+    onReorder: (Int, Int) -> Unit
 ) {
+    var accumulatedDragY by remember { mutableFloatStateOf(0f) }
+
     Card(
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+        border = BorderStroke(1.dp, if (isOrderEditing) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
@@ -452,6 +523,78 @@ private fun AdminAppItemCard(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            // Three-line drag handle and nudge arrows when ordering is active
+            if (isOrderEditing) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.padding(end = 8.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                            .pointerInput(index, totalCount) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = { accumulatedDragY = 0f },
+                                    onDragEnd = { accumulatedDragY = 0f },
+                                    onDragCancel = { accumulatedDragY = 0f },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        accumulatedDragY += dragAmount.y
+                                        val threshold = 70f
+                                        if (accumulatedDragY > threshold && index < totalCount - 1) {
+                                            onReorder(index, index + 1)
+                                            accumulatedDragY = 0f
+                                        } else if (accumulatedDragY < -threshold && index > 0) {
+                                            onReorder(index, index - 1)
+                                            accumulatedDragY = 0f
+                                        }
+                                    }
+                                )
+                            },
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DragHandle,
+                            contentDescription = "Hold and drag up or down",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    Column(
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(start = 2.dp)
+                    ) {
+                        IconButton(
+                            onClick = onMoveUp,
+                            enabled = index > 0,
+                            modifier = Modifier.size(22.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = "Move Up",
+                                tint = if (index > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                        IconButton(
+                            onClick = onMoveDown,
+                            enabled = index < totalCount - 1,
+                            modifier = Modifier.size(22.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowDown,
+                                contentDescription = "Move Down",
+                                tint = if (index < totalCount - 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                modifier = Modifier.size(16.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
@@ -829,8 +972,11 @@ private fun NewsManagementView(
     newsList: List<NewsPost>,
     onEditNews: (NewsPost) -> Unit,
     onCreateNews: () -> Unit,
-    onDeleteNews: (NewsPost) -> Unit
+    onDeleteNews: (NewsPost) -> Unit,
+    onReorderNews: (Int, Int) -> Unit = { _, _ -> }
 ) {
+    var isOrderEditing by remember { mutableStateOf(false) }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 90.dp)
@@ -852,59 +998,186 @@ private fun NewsManagementView(
                     )
                 )
 
-                Button(
-                    onClick = onCreateNews,
-                    shape = RoundedCornerShape(20.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
-                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Campaign,
-                        contentDescription = "New Broadcast",
-                        modifier = Modifier.size(16.dp)
-                    )
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Broadcast", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    OutlinedButton(
+                        onClick = { isOrderEditing = !isOrderEditing },
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = if (isOrderEditing) VerifiedBadgeGreen else MaterialTheme.colorScheme.primary
+                        ),
+                        border = BorderStroke(1.dp, if (isOrderEditing) VerifiedBadgeGreen else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
+                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = if (isOrderEditing) Icons.Default.CheckCircle else Icons.Default.SwapVert,
+                            contentDescription = "Edit Order",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = if (isOrderEditing) "Done" else "Edit Order",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Button(
+                        onClick = onCreateNews,
+                        shape = RoundedCornerShape(20.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
+                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Campaign,
+                            contentDescription = "New Broadcast",
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Broadcast", fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                    }
                 }
             }
         }
 
-        items(
-            items = newsList,
-            key = { it.id.ifBlank { it.title } }
-        ) { post ->
-            Card(
-                shape = RoundedCornerShape(16.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 4.dp)
-            ) {
-                Row(
+        if (newsList.isEmpty()) {
+            item(key = "empty_news") {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                        .padding(vertical = 32.dp)
                 ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = post.title,
-                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        )
-                        Text(
-                            text = post.subtitle,
-                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        )
-                        Text(
-                            text = "Type: ${post.type.name} • Tag: ${post.tag}",
-                            style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
-                        )
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("No news or announcements currently in Firestore.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedButton(onClick = onCreateNews) {
+                            Text("+ Create First Broadcast")
+                        }
                     }
+                }
+            }
+        } else {
+            itemsIndexed(
+                items = newsList,
+                key = { _, post -> post.id.ifBlank { post.title } }
+            ) { index, post ->
+                var accumulatedDragY by remember { mutableFloatStateOf(0f) }
 
-                    Row {
-                        IconButton(onClick = { onDeleteNews(post) }, modifier = Modifier.size(36.dp)) {
-                            Icon(Icons.Default.Delete, contentDescription = "Delete", tint = iOSSystemRed, modifier = Modifier.size(18.dp))
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, if (isOrderEditing) MaterialTheme.colorScheme.primary.copy(alpha = 0.5f) else MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (isOrderEditing) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(end = 8.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(36.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                                        .pointerInput(index, newsList.size) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = { accumulatedDragY = 0f },
+                                                onDragEnd = { accumulatedDragY = 0f },
+                                                onDragCancel = { accumulatedDragY = 0f },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    accumulatedDragY += dragAmount.y
+                                                    val threshold = 70f
+                                                    if (accumulatedDragY > threshold && index < newsList.size - 1) {
+                                                        onReorderNews(index, index + 1)
+                                                        accumulatedDragY = 0f
+                                                    } else if (accumulatedDragY < -threshold && index > 0) {
+                                                        onReorderNews(index, index - 1)
+                                                        accumulatedDragY = 0f
+                                                    }
+                                                }
+                                            )
+                                        },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DragHandle,
+                                        contentDescription = "Hold and drag to reorder",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                }
+
+                                Column(
+                                    verticalArrangement = Arrangement.Center,
+                                    modifier = Modifier.padding(start = 2.dp)
+                                ) {
+                                    IconButton(
+                                        onClick = { if (index > 0) onReorderNews(index, index - 1) },
+                                        enabled = index > 0,
+                                        modifier = Modifier.size(22.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.KeyboardArrowUp,
+                                            contentDescription = "Move Up",
+                                            tint = if (index > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                    IconButton(
+                                        onClick = { if (index < newsList.size - 1) onReorderNews(index, index + 1) },
+                                        enabled = index < newsList.size - 1,
+                                        modifier = Modifier.size(22.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.KeyboardArrowDown,
+                                            contentDescription = "Move Down",
+                                            tint = if (index < newsList.size - 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f),
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = post.title,
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                            )
+                            if (post.subtitle.isNotBlank()) {
+                                Text(
+                                    text = post.subtitle,
+                                    style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                )
+                            }
+                            Text(
+                                text = "Type: ${post.type.name} • Tag: ${post.tag} • ${post.author}",
+                                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.primary, fontSize = 11.sp)
+                            )
+                        }
+
+                        Row {
+                            IconButton(onClick = { onEditNews(post) }, modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.Edit, contentDescription = "Edit", tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(onClick = { onDeleteNews(post) }, modifier = Modifier.size(36.dp)) {
+                                Icon(Icons.Default.Delete, contentDescription = "Delete", tint = iOSSystemRed, modifier = Modifier.size(18.dp))
+                            }
                         }
                     }
                 }
@@ -920,7 +1193,9 @@ private fun NewsManagementView(
 private fun StoreConfigView(
     currentConfig: AppUpdateConfig,
     isLoading: Boolean,
-    onSaveConfig: (AppUpdateConfig) -> Unit
+    onSaveConfig: (AppUpdateConfig) -> Unit,
+    onBroadcastNotification: (String, String, String) -> Unit = { _, _, _ -> },
+    onClearNotification: () -> Unit = {}
 ) {
     val context = LocalContext.current
     var latestVersion by remember(currentConfig) { mutableStateOf(currentConfig.storeLatestVersion) }
@@ -930,10 +1205,128 @@ private fun StoreConfigView(
     var downloadUrl by remember(currentConfig) { mutableStateOf(currentConfig.downloadUrl) }
     var announcementMessage by remember(currentConfig) { mutableStateOf(currentConfig.announcementMessage) }
 
+    var notifTitle by remember { mutableStateOf("") }
+    var notifMessage by remember { mutableStateOf("") }
+    var notifActionUrl by remember { mutableStateOf("") }
+
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp)
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 90.dp)
     ) {
+        // Broadcast User Notification Section
+        item {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, iOSSystemBlue.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = CircleShape,
+                            color = iOSSystemBlue.copy(alpha = 0.15f),
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Campaign,
+                                    contentDescription = null,
+                                    tint = iOSSystemBlue,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "Broadcast User Notification",
+                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                            )
+                            Text(
+                                text = "Sends push & in-app alerts to all users",
+                                style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedTextField(
+                        value = notifTitle,
+                        onValueChange = { notifTitle = it },
+                        label = { Text("Notification Title *") },
+                        placeholder = { Text("e.g. 🎉 New Mod Released: Subway Surfers v3.2") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = notifMessage,
+                        onValueChange = { notifMessage = it },
+                        label = { Text("Notification Message / Body *") },
+                        placeholder = { Text("Detailed release notes or important announcement...") },
+                        minLines = 2,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = notifActionUrl,
+                        onValueChange = { notifActionUrl = it },
+                        label = { Text("Action Link / Package (optional)") },
+                        placeholder = { Text("https://... or app package name") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = {
+                            if (notifTitle.isBlank() || notifMessage.isBlank()) {
+                                Toast.makeText(context, "Please enter both notification title and message.", Toast.LENGTH_SHORT).show()
+                            } else {
+                                onBroadcastNotification(notifTitle, notifMessage, notifActionUrl)
+                                Toast.makeText(context, "Broadcast sent to all users!", Toast.LENGTH_SHORT).show()
+                                notifTitle = ""
+                                notifMessage = ""
+                                notifActionUrl = ""
+                            }
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Broadcast Notification to Users", fontWeight = FontWeight.Bold)
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            onClearNotification()
+                            Toast.makeText(context, "Active notification cleared.", Toast.LENGTH_SHORT).show()
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = iOSSystemRed),
+                        border = BorderStroke(1.dp, iOSSystemRed.copy(alpha = 0.5f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.NotificationsOff, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Clear / Dismiss Active Notification", fontWeight = FontWeight.Medium)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Force Update Section
         item {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -1034,6 +1427,269 @@ private fun StoreConfigView(
                     }
                 }
             }
+        }
+    }
+}
+
+// -------------------------------------------------------------
+// 5. NEWS EDITOR BOTTOM SHEET
+// -------------------------------------------------------------
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NewsEditorBottomSheet(
+    news: NewsPost?,
+    adminViewModel: AdminViewModel,
+    onDismiss: () -> Unit,
+    onSaved: () -> Unit
+) {
+    val context = LocalContext.current
+    val isEditMode = news != null
+
+    var title by remember { mutableStateOf(news?.title ?: "") }
+    var subtitle by remember { mutableStateOf(news?.subtitle ?: "") }
+    var tag by remember { mutableStateOf(news?.tag ?: "Update") }
+    var selectedType by remember { mutableStateOf(news?.type ?: NewsType.TEXT_ONLY) }
+    var bannerUrl by remember { mutableStateOf(news?.bannerUrl ?: "") }
+    var author by remember { mutableStateOf(news?.author ?: "HsStore Editorial") }
+    var authorRole by remember { mutableStateOf(news?.authorRole ?: "Curator") }
+    var readTime by remember { mutableStateOf(news?.readTime ?: "2 min read") }
+    var content by remember { mutableStateOf(news?.content ?: "") }
+    var bulletPointsText by remember { mutableStateOf(news?.bulletPoints?.joinToString("\n") ?: "") }
+    var linkedAppName by remember { mutableStateOf(news?.linkedAppName ?: "") }
+    var isPinned by remember { mutableStateOf(news?.isPinned ?: false) }
+    var isBreaking by remember { mutableStateOf(news?.isBreaking ?: false) }
+
+    val tags = listOf("Update", "Feature", "Notice", "Event", "Security", "Patch")
+    val newsTypes = listOf(NewsType.TEXT_ONLY, NewsType.BANNER, NewsType.PATCH_NOTES, NewsType.SPOTLIGHT)
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier.navigationBarsPadding()
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    text = if (isEditMode) "Edit Announcement" else "Broadcast New Story",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Close")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f, fill = false),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                item {
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it },
+                        label = { Text("Announcement Headline *") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = subtitle,
+                        onValueChange = { subtitle = it },
+                        label = { Text("Subheading / Kicker") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
+                    Text("Story Type", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        newsTypes.forEach { type ->
+                            FilterChip(
+                                selected = selectedType == type,
+                                onClick = { selectedType = type },
+                                label = { Text(type.name, fontSize = 11.sp) }
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Text("Category Tag", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        tags.take(3).forEach { t ->
+                            FilterChip(
+                                selected = tag.equals(t, ignoreCase = true),
+                                onClick = { tag = t },
+                                label = { Text(t, fontSize = 12.sp) }
+                            )
+                        }
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        tags.drop(3).forEach { t ->
+                            FilterChip(
+                                selected = tag.equals(t, ignoreCase = true),
+                                onClick = { tag = t },
+                                label = { Text(t, fontSize = 12.sp) }
+                            )
+                        }
+                    }
+                }
+
+                if (selectedType == NewsType.BANNER || selectedType == NewsType.SPOTLIGHT) {
+                    item {
+                        OutlinedTextField(
+                            value = bannerUrl,
+                            onValueChange = { bannerUrl = it },
+                            label = { Text("Banner Image URL") },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                item {
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = author,
+                            onValueChange = { author = it },
+                            label = { Text("Author") },
+                            modifier = Modifier.weight(1f)
+                        )
+                        OutlinedTextField(
+                            value = readTime,
+                            onValueChange = { readTime = it },
+                            label = { Text("Read Time") },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = content,
+                        onValueChange = { content = it },
+                        label = { Text("Full Article Content") },
+                        minLines = 4,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = bulletPointsText,
+                        onValueChange = { bulletPointsText = it },
+                        label = { Text("Highlights / Bullet Points (one per line)") },
+                        minLines = 3,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = linkedAppName,
+                        onValueChange = { linkedAppName = it },
+                        label = { Text("Linked App Package Name (Optional)") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Pin Announcement to Top", fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = isPinned,
+                            onCheckedChange = { isPinned = it }
+                        )
+                    }
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Mark as Breaking News", fontWeight = FontWeight.Medium)
+                        Switch(
+                            checked = isBreaking,
+                            onCheckedChange = { isBreaking = it },
+                            colors = SwitchDefaults.colors(checkedTrackColor = iOSSystemRed)
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(14.dp))
+
+            Button(
+                onClick = {
+                    if (title.isBlank()) {
+                        Toast.makeText(context, "Please enter an announcement title.", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
+                    val bullets = bulletPointsText.lines().map { it.trim() }.filter { it.isNotBlank() }
+                    val dateFormatted = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US).format(java.util.Date())
+                    val newPost = (news ?: NewsPost()).copy(
+                        title = title.trim(),
+                        subtitle = subtitle.trim(),
+                        tag = tag.trim(),
+                        type = selectedType,
+                        bannerUrl = bannerUrl.trim(),
+                        author = author.trim(),
+                        authorRole = authorRole.trim(),
+                        readTime = readTime.trim(),
+                        date = if (news != null && news.date.isNotBlank()) news.date else dateFormatted,
+                        content = content.trim(),
+                        bulletPoints = bullets,
+                        linkedAppName = if (linkedAppName.isNotBlank()) linkedAppName.trim() else null,
+                        isPinned = isPinned,
+                        isBreaking = isBreaking
+                    )
+                    adminViewModel.saveNews(newPost) {
+                        onSaved()
+                    }
+                },
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(50.dp)
+            ) {
+                Icon(Icons.Default.CloudUpload, contentDescription = null)
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(if (isEditMode) "Save Changes to News" else "Publish Story to Firestore", fontWeight = FontWeight.Bold)
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
         }
     }
 }

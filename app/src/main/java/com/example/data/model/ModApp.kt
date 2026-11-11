@@ -25,7 +25,17 @@ data class ModApp(
     val isVerified: Boolean = true,
     val author: String = "Community Dev",
     val updatedDate: String = "",
-    val permissionsRequired: List<String> = emptyList()
+    val permissionsRequired: List<String> = emptyList(),
+    val sortOrder: Int = 0
+)
+
+data class UserNotification(
+    val id: String = "",
+    val title: String = "",
+    val message: String = "",
+    val timestamp: Long = System.currentTimeMillis(),
+    val actionUrl: String = "",
+    val isActive: Boolean = true
 )
 
 data class AppUpdateConfig(
@@ -93,7 +103,8 @@ data class NewsPost(
     val linkedAppId: String? = null,
     val linkedAppName: String? = null,
     val isPinned: Boolean = false,
-    val isBreaking: Boolean = false
+    val isBreaking: Boolean = false,
+    val sortOrder: Int = 0
 )
 
 @IgnoreExtraProperties

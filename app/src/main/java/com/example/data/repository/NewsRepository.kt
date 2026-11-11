@@ -99,6 +99,8 @@ class NewsRepository(
         awaitClose { listenerRegistration.remove() }
     }
 
+    private val repoPrefs = context.getSharedPreferences("hsstore_news_prefs", Context.MODE_PRIVATE)
+
     private fun startRealtimeNewsSync() {
         scope.launch {
             _isRefreshing.value = true
@@ -115,14 +117,24 @@ class NewsRepository(
                 } ?: emptyList()
 
                 if (posts.isNotEmpty()) {
-                    _news.value = posts
+                    repoPrefs.edit().putBoolean("news_has_seeded", true).apply()
+                    val orderedPosts = applyCustomOrder(posts)
+                    _news.value = orderedPosts
                     _currentSource.value = NewsSource.FIRESTORE_LIVE
-                    _statusMessage.value = "Live news: ${posts.size} stories published on Cloud Firestore"
+                    _statusMessage.value = "Live news: ${orderedPosts.size} stories published on Cloud Firestore"
                     _lastSyncTime.value = System.currentTimeMillis()
                 } else {
-                    Log.i("NewsRepository", "Firestore /news is empty. Initiating initial auto-seed...")
-                    scope.launch {
-                        autoSeedFirestoreFromBundledNews()
+                    val alreadySeeded = repoPrefs.getBoolean("news_has_seeded", false)
+                    if (alreadySeeded) {
+                        // Admin intentionally deleted or cleared news; do NOT re-seed
+                        _news.value = emptyList()
+                        _statusMessage.value = "No stories published in Firestore (0 news)"
+                    } else {
+                        Log.i("NewsRepository", "First startup: Seeding default news to Firestore...")
+                        repoPrefs.edit().putBoolean("news_has_seeded", true).apply()
+                        scope.launch {
+                            autoSeedFirestoreFromBundledNews()
+                        }
                     }
                 }
             }
@@ -176,19 +188,41 @@ class NewsRepository(
         val docRef = if (post.id.isNotBlank()) newsCollection.document(post.id) else newsCollection.document()
         val dataToSave = post.copy(id = docRef.id)
         docRef.set(dataToSave, SetOptions.merge()).await()
+        _news.value = listOf(dataToSave) + _news.value.filter { it.id != dataToSave.id }
     }
 
     suspend fun deleteNews(newsId: String): Result<Unit> = runCatching {
         newsCollection.document(newsId).delete().await()
+        _news.value = _news.value.filter { it.id != newsId }
     }
 
     suspend fun syncRemoteNews(customUrl: String? = null): NewsSyncResult {
-        return NewsSyncResult(
-            success = true,
-            source = _currentSource.value,
-            count = _news.value.size,
-            message = "Firestore /news synchronized (${_news.value.size} active stories)"
-        )
+        _isRefreshing.value = true
+        return try {
+            val snapshot = newsCollection.orderBy("date", Query.Direction.DESCENDING).get().await()
+            val posts = snapshot.documents.mapNotNull { doc ->
+                doc.toObject(NewsPost::class.java)?.copy(id = doc.id)
+            }
+            _news.value = posts
+            _currentSource.value = NewsSource.FIRESTORE_LIVE
+            _statusMessage.value = "Live news: ${posts.size} stories published on Cloud Firestore"
+            _lastSyncTime.value = System.currentTimeMillis()
+            NewsSyncResult(
+                success = true,
+                source = _currentSource.value,
+                count = posts.size,
+                message = "Firestore /news synchronized (${posts.size} active stories)"
+            )
+        } catch (e: Exception) {
+            NewsSyncResult(
+                success = false,
+                source = _currentSource.value,
+                count = _news.value.size,
+                message = "Sync failed: ${e.localizedMessage}"
+            )
+        } finally {
+            _isRefreshing.value = false
+        }
     }
 
     fun dismissNotification() {
@@ -197,5 +231,44 @@ class NewsRepository(
 
     fun resetToDefaultPastebin() {
         _activeNewsUrl.value = "Firestore: /news (Cloud Real-Time)"
+    }
+
+    fun applyCustomOrder(newsList: List<NewsPost>): List<NewsPost> {
+        val savedOrderStr = repoPrefs.getString("custom_news_order_ids", null)
+        if (savedOrderStr.isNullOrBlank()) {
+            return newsList.sortedBy { it.sortOrder }
+        }
+        val orderedIds = savedOrderStr.split(",").filter { it.isNotBlank() }
+        if (orderedIds.isEmpty()) return newsList.sortedBy { it.sortOrder }
+
+        val idToIndex = orderedIds.withIndex().associate { it.value to it.index }
+        return newsList.sortedBy { idToIndex[it.id] ?: (10000 + it.sortOrder) }
+    }
+
+    fun reorderNews(fromIndex: Int, toIndex: Int) {
+        val currentList = _news.value.toMutableList()
+        if (fromIndex in currentList.indices && toIndex in currentList.indices) {
+            val item = currentList.removeAt(fromIndex)
+            currentList.add(toIndex, item)
+            _news.value = currentList
+            saveCustomOrder(currentList)
+        }
+    }
+
+    fun saveCustomOrder(newsList: List<NewsPost>) {
+        _news.value = newsList
+        val ids = newsList.joinToString(",") { it.id }
+        repoPrefs.edit().putString("custom_news_order_ids", ids).apply()
+        scope.launch {
+            try {
+                newsList.forEachIndexed { index, post ->
+                    if (post.id.isNotBlank()) {
+                        newsCollection.document(post.id).update("sortOrder", index)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.w("NewsRepo", "Failed to sync sortOrder to Firestore: ${e.message}")
+            }
+        }
     }
 }

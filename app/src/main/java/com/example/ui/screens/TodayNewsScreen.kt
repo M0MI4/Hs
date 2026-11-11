@@ -34,7 +34,19 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -98,10 +110,20 @@ fun TodayNewsScreen(
     onToggleParticles: () -> Unit,
     onDownloadLinkedApp: (ModApp) -> Unit,
     onNavigateToApps: () -> Unit,
+    onReorderNews: (Int, Int) -> Unit = { _, _ -> },
+    onIsScrollingChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     var searchQuery by remember { mutableStateOf("") }
+    var isReorderMode by remember { mutableStateOf(false) }
+
+    val lazyListState = rememberLazyListState()
+
+    // Smoothness: notify container when scrolling to pause background particle computations
+    LaunchedEffect(lazyListState.isScrollInProgress) {
+        onIsScrollingChanged(lazyListState.isScrollInProgress)
+    }
 
     var selectedStoryForDetail by remember { mutableStateOf<NewsPost?>(null) }
 
@@ -134,6 +156,7 @@ fun TodayNewsScreen(
         modifier = modifier.fillMaxSize()
     ) {
         LazyColumn(
+            state = lazyListState,
             modifier = Modifier
                 .fillMaxSize()
                 .testTag("today_news_screen"),
@@ -200,14 +223,53 @@ fun TodayNewsScreen(
                 }
             }
 
-            // 2. Search Field
+            // 2. Search Field + Reorder Toggle
             item(key = "today_controls") {
-                CupertinoSearchField(
-                    query = searchQuery,
-                    onQueryChange = { searchQuery = it },
-                    placeholder = LocalizedStrings.get("today_search_placeholder", currentLanguage),
-                    modifier = Modifier.padding(bottom = 14.dp)
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(modifier = Modifier.weight(1f)) {
+                        CupertinoSearchField(
+                            query = searchQuery,
+                            onQueryChange = { searchQuery = it },
+                            placeholder = LocalizedStrings.get("today_search_placeholder", currentLanguage)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isReorderMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(12.dp))
+                            .clickable { isReorderMode = !isReorderMode }
+                            .testTag("toggle_news_reorder_mode")
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                        ) {
+                            Icon(
+                                imageVector = if (isReorderMode) Icons.Default.Check else Icons.Default.DragHandle,
+                                contentDescription = if (isReorderMode) "Done" else "Sort Stories",
+                                tint = if (isReorderMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = if (isReorderMode) "Done" else "Sort",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isReorderMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            )
+                        }
+                    }
+                }
             }
 
             // 3. News Items: Banner News & Just Text News
@@ -246,43 +308,135 @@ fun TodayNewsScreen(
                     }
                 }
             } else {
-                items(
+                itemsIndexed(
                     items = filteredNews,
-                    key = { it.id },
-                    contentType = { it.type.name }
-                ) { newsItem ->
-                    Box(modifier = Modifier.padding(bottom = 16.dp)) {
-                        when (newsItem.type) {
-                            NewsType.BANNER -> {
-                                BannerNewsCard(
-                                    news = newsItem,
-                                    currentLanguage = currentLanguage,
-                                    onCardClick = { selectedStoryForDetail = newsItem },
-                                    appsCatalog = appsCatalog,
-                                    onDownloadLinkedApp = onDownloadLinkedApp
-                                )
+                    key = { _, it -> it.id },
+                    contentType = { _, it -> it.type.name }
+                ) { index, newsItem ->
+                    var dragAccumulator by remember { mutableFloatStateOf(0f) }
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(modifier = Modifier.weight(1f)) {
+                            when (newsItem.type) {
+                                NewsType.BANNER -> {
+                                    BannerNewsCard(
+                                        news = newsItem,
+                                        currentLanguage = currentLanguage,
+                                        onCardClick = { selectedStoryForDetail = newsItem },
+                                        appsCatalog = appsCatalog,
+                                        onDownloadLinkedApp = onDownloadLinkedApp
+                                    )
+                                }
+                                NewsType.TEXT_ONLY -> {
+                                    TextOnlyNewsCard(
+                                        news = newsItem,
+                                        currentLanguage = currentLanguage,
+                                        onCardClick = { selectedStoryForDetail = newsItem }
+                                    )
+                                }
+                                NewsType.PATCH_NOTES -> {
+                                    PatchNotesCard(
+                                        news = newsItem,
+                                        onCardClick = { selectedStoryForDetail = newsItem }
+                                    )
+                                }
+                                NewsType.SPOTLIGHT -> {
+                                    BannerNewsCard(
+                                        news = newsItem,
+                                        currentLanguage = currentLanguage,
+                                        onCardClick = { selectedStoryForDetail = newsItem },
+                                        appsCatalog = appsCatalog,
+                                        onDownloadLinkedApp = onDownloadLinkedApp
+                                    )
+                                }
                             }
-                            NewsType.TEXT_ONLY -> {
-                                TextOnlyNewsCard(
-                                    news = newsItem,
-                                    currentLanguage = currentLanguage,
-                                    onCardClick = { selectedStoryForDetail = newsItem }
-                                )
-                            }
-                            NewsType.PATCH_NOTES -> {
-                                PatchNotesCard(
-                                    news = newsItem,
-                                    onCardClick = { selectedStoryForDetail = newsItem }
-                                )
-                            }
-                            NewsType.SPOTLIGHT -> {
-                                BannerNewsCard(
-                                    news = newsItem,
-                                    currentLanguage = currentLanguage,
-                                    onCardClick = { selectedStoryForDetail = newsItem },
-                                    appsCatalog = appsCatalog,
-                                    onDownloadLinkedApp = onDownloadLinkedApp
-                                )
+                        }
+
+                        // Reorder Controls for News
+                        AnimatedVisibility(
+                            visible = isReorderMode,
+                            enter = fadeIn(),
+                            exit = fadeOut()
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(start = 6.dp)
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+                                    IconButton(
+                                        onClick = {
+                                            if (index > 0) onReorderNews(index, index - 1)
+                                        },
+                                        enabled = index > 0,
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.KeyboardArrowUp,
+                                            contentDescription = "Move Up",
+                                            tint = if (index > 0) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+
+                                    IconButton(
+                                        onClick = {
+                                            if (index < filteredNews.size - 1) onReorderNews(index, index + 1)
+                                        },
+                                        enabled = index < filteredNews.size - 1,
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.KeyboardArrowDown,
+                                            contentDescription = "Move Down",
+                                            tint = if (index < filteredNews.size - 1) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    modifier = Modifier
+                                        .padding(start = 2.dp)
+                                        .size(width = 36.dp, height = 54.dp)
+                                        .pointerInput(newsItem.id, index) {
+                                            detectDragGesturesAfterLongPress(
+                                                onDragStart = { dragAccumulator = 0f },
+                                                onDragEnd = { dragAccumulator = 0f },
+                                                onDragCancel = { dragAccumulator = 0f },
+                                                onDrag = { change, dragAmount ->
+                                                    change.consume()
+                                                    dragAccumulator += dragAmount.y
+                                                    val threshold = 90f
+                                                    if (dragAccumulator > threshold && index < filteredNews.size - 1) {
+                                                        onReorderNews(index, index + 1)
+                                                        dragAccumulator = 0f
+                                                    } else if (dragAccumulator < -threshold && index > 0) {
+                                                        onReorderNews(index, index - 1)
+                                                        dragAccumulator = 0f
+                                                    }
+                                                }
+                                            )
+                                        }
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.DragHandle,
+                                            contentDescription = "Drag Reorder Handle",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }

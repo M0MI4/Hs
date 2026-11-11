@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.AppUpdateConfig
 import com.example.data.model.ModApp
 import com.example.data.model.NewsPost
+import com.example.data.model.UserNotification
 import com.example.data.repository.CatalogRepository
 import com.example.data.repository.CatalogSource
 import com.example.data.repository.FirestoreSyncRepository
@@ -42,9 +43,10 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     val currentNewsSource: StateFlow<NewsSource> = newsRepo.currentSource
     val activeNewsUrl: StateFlow<String> = newsRepo.activeNewsUrl
 
-    // Update States
+    // Update & Notification States
     val updateConfig: StateFlow<AppUpdateConfig?> = updateRepo.updateConfig
     val hasUpdate: StateFlow<Boolean> = updateRepo.hasUpdate
+    val activeNotification: StateFlow<UserNotification?> = updateRepo.activeNotification
 
     // UI Dialog & Selection States
     private val _selectedAppForDetail = MutableStateFlow<ModApp?>(null)
@@ -55,6 +57,18 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _bookmarkedAppIds = MutableStateFlow<Set<String>>(emptySet())
     val bookmarkedAppIds: StateFlow<Set<String>> = _bookmarkedAppIds.asStateFlow()
+
+    fun reorderApps(fromIndex: Int, toIndex: Int) {
+        catalogRepo.reorderApps(fromIndex, toIndex)
+    }
+
+    fun reorderNews(fromIndex: Int, toIndex: Int) {
+        newsRepo.reorderNews(fromIndex, toIndex)
+    }
+
+    fun dismissNotification() {
+        updateRepo.dismissInAppNotification()
+    }
 
     init {
         // Preload installed applications into memory cache to eliminate scroll lag

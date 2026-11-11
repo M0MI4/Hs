@@ -4,6 +4,8 @@ import android.content.Context
 import android.util.Log
 import com.example.R
 import com.example.data.model.AppUpdateConfig
+import com.example.data.model.UserNotification
+import com.example.util.NotificationHelper
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.CoroutineScope
@@ -29,6 +31,7 @@ class UpdateRepository(
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private val configDoc = firestore.collection("config").document("store")
+    private val notificationDoc = firestore.collection("config").document("notification")
 
     private val _updateConfig = MutableStateFlow<AppUpdateConfig?>(
         AppUpdateConfig(
@@ -42,6 +45,9 @@ class UpdateRepository(
     )
     val updateConfig: StateFlow<AppUpdateConfig?> = _updateConfig.asStateFlow()
 
+    private val _activeNotification = MutableStateFlow<UserNotification?>(null)
+    val activeNotification: StateFlow<UserNotification?> = _activeNotification.asStateFlow()
+
     private val _isChecking = MutableStateFlow(false)
     val isChecking: StateFlow<Boolean> = _isChecking.asStateFlow()
 
@@ -51,8 +57,12 @@ class UpdateRepository(
     private val _lastCheckedMessage = MutableStateFlow<String>("Monitoring Firestore /config/store.")
     val lastCheckedMessage: StateFlow<String> = _lastCheckedMessage.asStateFlow()
 
+    private val notifPrefs = context.getSharedPreferences("hsstore_notif_prefs", Context.MODE_PRIVATE)
+
     init {
+        NotificationHelper.initNotificationChannel(context)
         startRealtimeConfigSync()
+        startRealtimeNotificationSync()
     }
 
     private fun startRealtimeConfigSync() {
@@ -76,7 +86,6 @@ class UpdateRepository(
                         }
                     }
                 } else {
-                    // Document doesn't exist yet -> seed initial default store config
                     scope.launch {
                         try {
                             configDoc.set(_updateConfig.value ?: AppUpdateConfig(), SetOptions.merge()).await()
@@ -85,6 +94,45 @@ class UpdateRepository(
                             Log.w("UpdateRepository", "Config seed error: ${e.message}")
                         }
                     }
+                }
+            }
+        }
+    }
+
+    private fun startRealtimeNotificationSync() {
+        scope.launch {
+            notificationDoc.addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("UpdateRepository", "Notification listener error: ${error.message}")
+                    return@addSnapshotListener
+                }
+
+                if (snapshot != null && snapshot.exists()) {
+                    val notif = snapshot.toObject(UserNotification::class.java)?.copy(id = snapshot.id)
+                    if (notif != null && notif.isActive && notif.title.isNotBlank()) {
+                        _activeNotification.value = notif
+
+                        val lastDeliveredId = notifPrefs.getString("last_delivered_notif_id", null)
+                        val lastTimestamp = notifPrefs.getLong("last_delivered_notif_time", 0L)
+                        val isNew = (notif.id != lastDeliveredId || notif.timestamp > lastTimestamp)
+
+                        if (isNew) {
+                            notifPrefs.edit()
+                                .putString("last_delivered_notif_id", notif.id)
+                                .putLong("last_delivered_notif_time", notif.timestamp)
+                                .apply()
+
+                            NotificationHelper.showSystemNotification(
+                                context = context,
+                                title = notif.title,
+                                message = notif.message
+                            )
+                        }
+                    } else {
+                        _activeNotification.value = null
+                    }
+                } else {
+                    _activeNotification.value = null
                 }
             }
         }
@@ -102,6 +150,26 @@ class UpdateRepository(
         configDoc.set(config, SetOptions.merge()).await()
         _updateConfig.value = config
         checkUpdateAvailability()
+    }
+
+    suspend fun broadcastNotification(notif: UserNotification): Result<Unit> = runCatching {
+        val toSave = notif.copy(
+            id = if (notif.id.isNotBlank()) notif.id else "notif_${System.currentTimeMillis()}",
+            timestamp = System.currentTimeMillis(),
+            isActive = true
+        )
+        notificationDoc.set(toSave, SetOptions.merge()).await()
+        _activeNotification.value = toSave
+        NotificationHelper.showSystemNotification(context, toSave.title, toSave.message)
+    }
+
+    suspend fun clearActiveNotification(): Result<Unit> = runCatching {
+        notificationDoc.set(mapOf("isActive" to false), SetOptions.merge()).await()
+        _activeNotification.value = null
+    }
+
+    fun dismissInAppNotification() {
+        _activeNotification.value = null
     }
 
     suspend fun checkForUpdatesRemote(customUrl: String? = null): Result<AppUpdateConfig> {
