@@ -118,9 +118,9 @@ fun AppDetailSheet(
     // Lightbox State
     var lightboxInitialIndex by remember { mutableStateOf<Int?>(null) }
 
-    // Curated high quality app preview screenshots based on app theme
-    val screenshots = remember(app.id, app.category) {
-        getSampleScreenshotsForApp(app)
+    // Curated high quality app preview screenshots or custom uploaded screenshots
+    val screenshots = remember(app.id, app.category, app.screenshots) {
+        if (app.screenshots.isNotEmpty()) app.screenshots else getSampleScreenshotsForApp(app)
     }
 
     ModalBottomSheet(

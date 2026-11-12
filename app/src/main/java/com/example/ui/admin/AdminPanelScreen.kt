@@ -3,10 +3,12 @@ package com.example.ui.admin
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,6 +26,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
@@ -31,6 +34,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
@@ -86,10 +90,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.data.model.AppUpdateConfig
 import com.example.data.model.ModApp
 import com.example.data.model.NewsPost
@@ -701,6 +707,8 @@ private fun AppEditorBottomSheet(
     var author by remember { mutableStateOf(app?.author ?: "Hama Sade Team") }
     var isVerified by remember { mutableStateOf(app?.isVerified ?: true) }
     var isParsingApk by remember { mutableStateOf(false) }
+    var screenshotsList by remember(app) { mutableStateOf(app?.screenshots ?: emptyList()) }
+    var screenshotInputUrl by remember { mutableStateOf("") }
 
     val categories = listOf("Apps", "Games", "Tools", "Emulators", "Media", "Tweaks")
 
@@ -725,6 +733,16 @@ private fun AppEditorBottomSheet(
                     Toast.makeText(context, "Could not parse APK package information.", Toast.LENGTH_LONG).show()
                 }
             }
+        }
+    }
+
+    // Screenshot Photo Picker from Device Gallery
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            screenshotsList = screenshotsList + uri.toString()
+            Toast.makeText(context, "Screenshot added from gallery!", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -876,6 +894,119 @@ private fun AppEditorBottomSheet(
                     )
                 }
 
+                // Screenshots Editor Item
+                item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                            .padding(12.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(
+                                text = "App Screenshots (${screenshotsList.size})",
+                                style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                            )
+
+                            OutlinedButton(
+                                onClick = {
+                                    photoPickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                },
+                                shape = RoundedCornerShape(20.dp),
+                                contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
+                            ) {
+                                Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Gallery Pick", fontSize = 12.sp)
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(8.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedTextField(
+                                value = screenshotInputUrl,
+                                onValueChange = { screenshotInputUrl = it },
+                                label = { Text("Add Screenshot Image URL") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Button(
+                                onClick = {
+                                    if (screenshotInputUrl.isNotBlank()) {
+                                        screenshotsList = screenshotsList + screenshotInputUrl.trim()
+                                        screenshotInputUrl = ""
+                                    }
+                                },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 12.dp)
+                            ) {
+                                Text("+ Add")
+                            }
+                        }
+
+                        if (screenshotsList.isNotEmpty()) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                itemsIndexed(screenshotsList) { sIndex, sUrl ->
+                                    Box(
+                                        modifier = Modifier
+                                            .size(width = 84.dp, height = 130.dp)
+                                            .clip(RoundedCornerShape(10.dp))
+                                            .background(MaterialTheme.colorScheme.surface)
+                                            .border(1.dp, MaterialTheme.colorScheme.outlineVariant, RoundedCornerShape(10.dp))
+                                    ) {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context)
+                                                .data(sUrl)
+                                                .crossfade(false)
+                                                .allowHardware(true)
+                                                .build(),
+                                            contentDescription = "Screenshot ${sIndex + 1}",
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+
+                                        IconButton(
+                                            onClick = {
+                                                screenshotsList = screenshotsList.toMutableList().also { it.removeAt(sIndex) }
+                                            },
+                                            modifier = Modifier
+                                                .align(Alignment.TopEnd)
+                                                .padding(2.dp)
+                                                .size(24.dp)
+                                                .clip(CircleShape)
+                                                .background(Color.Black.copy(alpha = 0.7f))
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Remove screenshot",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(14.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 item {
                     OutlinedTextField(
                         value = sha256,
@@ -940,6 +1071,7 @@ private fun AppEditorBottomSheet(
                         sizeDisplay = sizeDisplay.trim(),
                         downloadUrl = downloadUrl.trim(),
                         iconUrl = iconUrl.trim(),
+                        screenshots = screenshotsList,
                         sha256 = sha256.trim(),
                         description = description.trim(),
                         modFeatures = features,
@@ -987,23 +1119,25 @@ private fun NewsManagementView(
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 90.dp)
     ) {
         item(key = "news_header", contentType = "header") {
-            Row(
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+                    .padding(vertical = 6.dp)
             ) {
-                Text(
-                    text = "ACTIVE STORIES & ANNOUNCEMENTS (${newsList.size})",
-                    style = MaterialTheme.typography.labelSmall.copy(
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "ACTIVE STORIES & ANNOUNCEMENTS (${newsList.size})",
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 0.8.sp
+                        )
                     )
-                )
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
                     OutlinedButton(
                         onClick = { isOrderEditing = !isOrderEditing },
                         shape = RoundedCornerShape(20.dp),
@@ -1011,7 +1145,7 @@ private fun NewsManagementView(
                             contentColor = if (isOrderEditing) VerifiedBadgeGreen else MaterialTheme.colorScheme.primary
                         ),
                         border = BorderStroke(1.dp, if (isOrderEditing) VerifiedBadgeGreen else MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)),
-                        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp)
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                     ) {
                         Icon(
                             imageVector = if (isOrderEditing) Icons.Default.CheckCircle else Icons.Default.SwapVert,
@@ -1025,24 +1159,33 @@ private fun NewsManagementView(
                             fontSize = 12.sp
                         )
                     }
-
-                    Spacer(modifier = Modifier.width(8.dp))
-
-                    Button(
-                        onClick = onCreateNews,
-                        shape = RoundedCornerShape(20.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
-                        contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Campaign,
-                            contentDescription = "New Broadcast",
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Broadcast", fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                    }
                 }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Prominently placed, centered Blue Broadcast Story Button
+                Button(
+                    onClick = onCreateNews,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Campaign,
+                        contentDescription = "Create New Broadcast Story",
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Create New Broadcast Story",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
 

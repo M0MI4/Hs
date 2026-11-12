@@ -68,6 +68,7 @@ fun AppsScreen(
     isRefreshing: Boolean = false,
     currentLanguage: AppLanguage = AppLanguage.ENGLISH,
     isOnline: Boolean = true,
+    isAdmin: Boolean = false,
     onRefresh: () -> Unit = {},
     onAppSelected: (ModApp) -> Unit,
     onDownloadApp: (ModApp) -> Unit,
@@ -218,33 +219,35 @@ fun AppsScreen(
                         )
                     )
 
-                    // Three Lines Reorder Button Toggle
-                    Surface(
-                        shape = ReorderPillShape,
-                        color = if (isReorderMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier
-                            .clip(ReorderPillShape)
-                            .clickable { isReorderMode = !isReorderMode }
-                            .testTag("toggle_reorder_mode")
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                    if (isAdmin) {
+                        // Three Lines Reorder Button Toggle (Admins Only)
+                        Surface(
+                            shape = ReorderPillShape,
+                            color = if (isReorderMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .clip(ReorderPillShape)
+                                .clickable { isReorderMode = !isReorderMode }
+                                .testTag("toggle_reorder_mode")
                         ) {
-                            Icon(
-                                imageVector = if (isReorderMode) Icons.Default.Check else Icons.Default.DragHandle,
-                                contentDescription = if (isReorderMode) "Done" else "Sort Apps",
-                                tint = if (isReorderMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(6.dp))
-                            Text(
-                                text = if (isReorderMode) "Done" else "Edit Order",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isReorderMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isReorderMode) Icons.Default.Check else Icons.Default.DragHandle,
+                                    contentDescription = if (isReorderMode) "Done" else "Sort Apps",
+                                    tint = if (isReorderMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
                                 )
-                            )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = if (isReorderMode) "Done" else "Edit Order",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isReorderMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
                         }
                     }
                 }
@@ -303,9 +306,9 @@ fun AppsScreen(
                                 )
                             }
 
-                            // Three Lines Drag Handle & Up/Down Nudge Controls in Reorder Mode
+                            // Three Lines Drag Handle & Up/Down Nudge Controls in Reorder Mode (Admins Only)
                             AnimatedVisibility(
-                                visible = isReorderMode,
+                                visible = isAdmin && isReorderMode,
                                 enter = fadeIn(),
                                 exit = fadeOut()
                             ) {

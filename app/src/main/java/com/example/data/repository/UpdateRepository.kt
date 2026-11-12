@@ -109,14 +109,30 @@ class UpdateRepository(
 
                 if (snapshot != null && snapshot.exists()) {
                     val notif = snapshot.toObject(UserNotification::class.java)?.copy(id = snapshot.id)
-                    if (notif != null && notif.isActive && notif.title.isNotBlank()) {
-                        _activeNotification.value = notif
+                    val rawActive = snapshot.getBoolean("isActive") ?: snapshot.getBoolean("active") ?: false
+                    val title = snapshot.getString("title") ?: ""
+                    val isReallyActive = notif != null && notif.isActive && rawActive && title.isNotBlank() && notif.title.isNotBlank()
+
+                    val locallyDismissedId = notifPrefs.getString("locally_dismissed_notif_id", null)
+                    val locallyDismissedTitle = notifPrefs.getString("locally_dismissed_notif_title", null)
+                    val locallyDismissedTime = notifPrefs.getLong("locally_dismissed_notif_time", 0L)
+
+                    if (isReallyActive && notif != null) {
+                        // Check if user dismissed this notification locally
+                        val isDismissed = (notif.id == locallyDismissedId) ||
+                                (notif.title == locallyDismissedTitle && notif.timestamp <= locallyDismissedTime)
+
+                        if (!isDismissed) {
+                            _activeNotification.value = notif
+                        } else {
+                            _activeNotification.value = null
+                        }
 
                         val lastDeliveredId = notifPrefs.getString("last_delivered_notif_id", null)
                         val lastTimestamp = notifPrefs.getLong("last_delivered_notif_time", 0L)
                         val isNew = (notif.id != lastDeliveredId || notif.timestamp > lastTimestamp)
 
-                        if (isNew) {
+                        if (isNew && !isDismissed) {
                             notifPrefs.edit()
                                 .putString("last_delivered_notif_id", notif.id)
                                 .putLong("last_delivered_notif_time", notif.timestamp)
@@ -153,22 +169,52 @@ class UpdateRepository(
     }
 
     suspend fun broadcastNotification(notif: UserNotification): Result<Unit> = runCatching {
+        val newId = "notif_${System.currentTimeMillis()}"
         val toSave = notif.copy(
-            id = if (notif.id.isNotBlank()) notif.id else "notif_${System.currentTimeMillis()}",
+            id = newId,
             timestamp = System.currentTimeMillis(),
             isActive = true
         )
+        // Reset local dismissal so new broadcast is visible
+        notifPrefs.edit()
+            .remove("locally_dismissed_notif_id")
+            .remove("locally_dismissed_notif_title")
+            .remove("locally_dismissed_notif_time")
+            .apply()
         notificationDoc.set(toSave, SetOptions.merge()).await()
+        notificationDoc.set(mapOf("isActive" to true, "active" to true), SetOptions.merge()).await()
         _activeNotification.value = toSave
         NotificationHelper.showSystemNotification(context, toSave.title, toSave.message)
     }
 
     suspend fun clearActiveNotification(): Result<Unit> = runCatching {
-        notificationDoc.set(mapOf("isActive" to false), SetOptions.merge()).await()
+        // Completely overwrite and clear both in Firestore and locally
+        notificationDoc.set(
+            mapOf(
+                "isActive" to false,
+                "active" to false,
+                "title" to "",
+                "message" to "",
+                "timestamp" to System.currentTimeMillis()
+            )
+        ).await()
         _activeNotification.value = null
+        notifPrefs.edit()
+            .remove("last_delivered_notif_id")
+            .remove("locally_dismissed_notif_id")
+            .remove("locally_dismissed_notif_title")
+            .apply()
     }
 
     fun dismissInAppNotification() {
+        val current = _activeNotification.value
+        if (current != null) {
+            notifPrefs.edit()
+                .putString("locally_dismissed_notif_id", current.id)
+                .putString("locally_dismissed_notif_title", current.title)
+                .putLong("locally_dismissed_notif_time", current.timestamp)
+                .apply()
+        }
         _activeNotification.value = null
     }
 

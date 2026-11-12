@@ -360,6 +360,7 @@ fun MainAppContent(
                             onNavigateToApps = {
                                 settingsViewModel.setTab(MainTab.APPS)
                             },
+                            isAdmin = adminState.isAdminLoggedIn,
                             onReorderNews = { from, to -> storeViewModel.reorderNews(from, to) },
                             onIsScrollingChanged = { isListScrolling = it }
                         )
@@ -370,6 +371,7 @@ fun MainAppContent(
                             isRefreshing = isCatalogLoading,
                             currentLanguage = currentLanguage,
                             isOnline = isOnline,
+                            isAdmin = adminState.isAdminLoggedIn,
                             onRefresh = {
                                 coroutineScope.launch {
                                     val res = storeViewModel.refreshCatalog()

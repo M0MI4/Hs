@@ -25,7 +25,8 @@ data class ModAppEntity(
     val isVerified: Boolean,
     val author: String,
     val updatedDate: String,
-    val permissionsRequired: List<String>
+    val permissionsRequired: List<String>,
+    val screenshots: List<String> = emptyList()
 ) {
     fun toDomain(): ModApp {
         return ModApp(
@@ -48,7 +49,8 @@ data class ModAppEntity(
             isVerified = isVerified,
             author = author,
             updatedDate = updatedDate,
-            permissionsRequired = permissionsRequired
+            permissionsRequired = permissionsRequired,
+            screenshots = screenshots
         )
     }
 
@@ -74,7 +76,8 @@ data class ModAppEntity(
                 isVerified = app.isVerified,
                 author = app.author,
                 updatedDate = app.updatedDate,
-                permissionsRequired = app.permissionsRequired
+                permissionsRequired = app.permissionsRequired,
+                screenshots = app.screenshots
             )
         }
     }

@@ -28,7 +28,8 @@ data class ModApp(
     val author: String = "Community Dev",
     val updatedDate: String = "",
     val permissionsRequired: List<String> = emptyList(),
-    val sortOrder: Int = 0
+    val sortOrder: Int = 0,
+    val screenshots: List<String> = emptyList()
 )
 
 @Immutable
@@ -38,7 +39,9 @@ data class UserNotification(
     val message: String = "",
     val timestamp: Long = System.currentTimeMillis(),
     val actionUrl: String = "",
-    val isActive: Boolean = true
+    @get:com.google.firebase.firestore.PropertyName("isActive")
+    @set:com.google.firebase.firestore.PropertyName("isActive")
+    var isActive: Boolean = true
 )
 
 @Immutable

@@ -157,20 +157,20 @@ class CatalogRepository(
                         }
                     }
                 } else {
+                    // Do NOT wipe local cache or Room if remote snapshot is temporarily empty
+                    // (e.g. during auth state changes, reconnection, or offline startup).
                     val alreadySeeded = repoPrefs.getBoolean("catalog_has_seeded", false)
-                    if (alreadySeeded) {
-                        // Admin intentionally deleted apps or catalog is empty; do NOT re-seed
-                        _firestoreApps.value = emptyList()
-                        _statusMessage.value = "Store catalog is empty (0 apps)"
+                    if (!alreadySeeded && _firestoreApps.value.isEmpty()) {
                         scope.launch {
-                            try { modAppDao.clearAll() } catch (_: Exception) {}
-                        }
-                    } else {
-                        // First run initialization only
-                        Log.i("CatalogRepo", "First startup: Seeding bundled apps to Firestore...")
-                        repoPrefs.edit().putBoolean("catalog_has_seeded", true).apply()
-                        scope.launch {
-                            autoSeedFirestoreFromBundledCatalog()
+                            try {
+                                val existingCount = appsCollection.limit(1).get().await().size()
+                                if (existingCount == 0) {
+                                    repoPrefs.edit().putBoolean("catalog_has_seeded", true).apply()
+                                    autoSeedFirestoreFromBundledCatalog()
+                                }
+                            } catch (e: Exception) {
+                                Log.w("CatalogRepo", "Auto-seed check skipped: ${e.message}")
+                            }
                         }
                     }
                 }
@@ -180,6 +180,12 @@ class CatalogRepository(
 
     private suspend fun autoSeedFirestoreFromBundledCatalog() {
         try {
+            // Check if Firestore already has apps before seeding
+            val existing = appsCollection.limit(1).get().await()
+            if (!existing.isEmpty) {
+                Log.i("CatalogRepo", "Firestore /apps already contains apps, skipping auto-seed.")
+                return
+            }
             val bundled = loadBundledCatalog()
             if (bundled.isNotEmpty()) {
                 _firestoreApps.value = bundled
@@ -246,21 +252,26 @@ class CatalogRepository(
     suspend fun syncWithRetrofit(customUrl: String? = null): RemoteSyncResult {
         _isLoading.value = true
         return try {
-            val snapshot = appsCollection
-                .orderBy("downloadsCount", Query.Direction.DESCENDING)
-                .get()
-                .await()
+            val snapshot = appsCollection.get().await()
             val remoteApps = snapshot.documents.mapNotNull { doc ->
                 doc.toObject(ModApp::class.java)?.copy(id = doc.id)
             }
-            _firestoreApps.value = remoteApps
+            if (remoteApps.isNotEmpty()) {
+                val ordered = applyCustomOrder(remoteApps)
+                _firestoreApps.value = ordered
+                scope.launch {
+                    try {
+                        modAppDao.insertApps(ordered.map { ModAppEntity.fromDomain(it) })
+                    } catch (_: Exception) {}
+                }
+            }
             _currentSource.value = CatalogSource.FIRESTORE_LIVE
-            _statusMessage.value = "Live sync: ${remoteApps.size} apps from Cloud Firestore"
+            _statusMessage.value = "Live sync: ${_firestoreApps.value.size} apps from Cloud Firestore"
             RemoteSyncResult(
                 success = true,
                 source = _currentSource.value,
-                count = remoteApps.size,
-                message = "Firestore synchronized (${remoteApps.size} apps active)"
+                count = _firestoreApps.value.size,
+                message = "Firestore synchronized (${_firestoreApps.value.size} apps active)"
             )
         } catch (e: Exception) {
             RemoteSyncResult(

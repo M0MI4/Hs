@@ -117,6 +117,7 @@ fun TodayNewsScreen(
     appsCatalog: List<ModApp>,
     currentLanguage: AppLanguage = AppLanguage.ENGLISH,
     isOnline: Boolean = true,
+    isAdmin: Boolean = false,
     onRefreshNews: () -> Unit,
     onToggleParticles: () -> Unit,
     onDownloadLinkedApp: (ModApp) -> Unit,
@@ -254,34 +255,36 @@ fun TodayNewsScreen(
                         )
                     }
 
-                    Spacer(modifier = Modifier.width(8.dp))
+                    if (isAdmin) {
+                        Spacer(modifier = Modifier.width(8.dp))
 
-                    Surface(
-                        shape = NewsReorderShape,
-                        color = if (isReorderMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                        modifier = Modifier
-                            .clip(NewsReorderShape)
-                            .clickable { isReorderMode = !isReorderMode }
-                            .testTag("toggle_news_reorder_mode")
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                        Surface(
+                            shape = NewsReorderShape,
+                            color = if (isReorderMode) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier
+                                .clip(NewsReorderShape)
+                                .clickable { isReorderMode = !isReorderMode }
+                                .testTag("toggle_news_reorder_mode")
                         ) {
-                            Icon(
-                                imageVector = if (isReorderMode) Icons.Default.Check else Icons.Default.DragHandle,
-                                contentDescription = if (isReorderMode) "Done" else "Sort Stories",
-                                tint = if (isReorderMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(
-                                text = if (isReorderMode) "Done" else "Sort",
-                                style = MaterialTheme.typography.labelSmall.copy(
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isReorderMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+                            ) {
+                                Icon(
+                                    imageVector = if (isReorderMode) Icons.Default.Check else Icons.Default.DragHandle,
+                                    contentDescription = if (isReorderMode) "Done" else "Sort Stories",
+                                    tint = if (isReorderMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp)
                                 )
-                            )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = if (isReorderMode) "Done" else "Sort",
+                                    style = MaterialTheme.typography.labelSmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isReorderMode) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                )
+                            }
                         }
                     }
                 }
@@ -372,9 +375,9 @@ fun TodayNewsScreen(
                             }
                         }
 
-                        // Reorder Controls for News
+                        // Reorder Controls for News (Admins Only)
                         AnimatedVisibility(
-                            visible = isReorderMode,
+                            visible = isAdmin && isReorderMode,
                             enter = fadeIn(),
                             exit = fadeOut()
                         ) {

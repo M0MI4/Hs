@@ -124,14 +124,8 @@ class NewsRepository(
                     _statusMessage.value = "Live news: ${orderedPosts.size} stories published on Cloud Firestore"
                     _lastSyncTime.value = System.currentTimeMillis()
                 } else {
-                    val alreadySeeded = repoPrefs.getBoolean("news_has_seeded", false)
-                    if (alreadySeeded) {
-                        // Admin intentionally deleted or cleared news; do NOT re-seed
-                        _news.value = emptyList()
-                        _statusMessage.value = "No stories published in Firestore (0 news)"
-                    } else {
-                        Log.i("NewsRepository", "First startup: Seeding default news to Firestore...")
-                        repoPrefs.edit().putBoolean("news_has_seeded", true).apply()
+                    // Do NOT clear in-memory news if Firestore reconnects or temporarily yields empty snapshot
+                    if (_news.value.isEmpty()) {
                         scope.launch {
                             autoSeedFirestoreFromBundledNews()
                         }
@@ -143,6 +137,13 @@ class NewsRepository(
 
     private suspend fun autoSeedFirestoreFromBundledNews() {
         try {
+            // Check if remote Firestore collection already has any stories before seeding
+            val existing = runCatching { newsCollection.limit(1).get().await() }.getOrNull()
+            if (existing != null && !existing.isEmpty) {
+                Log.i("NewsRepository", "Firestore /news already has documents; skipping auto-seed.")
+                return
+            }
+
             val bundled = loadBundledNews()
             if (bundled.isNotEmpty()) {
                 _news.value = bundled
@@ -199,11 +200,12 @@ class NewsRepository(
     suspend fun syncRemoteNews(customUrl: String? = null): NewsSyncResult {
         _isRefreshing.value = true
         return try {
-            val snapshot = newsCollection.orderBy("date", Query.Direction.DESCENDING).get().await()
+            val snapshot = newsCollection.get().await()
             val posts = snapshot.documents.mapNotNull { doc ->
                 doc.toObject(NewsPost::class.java)?.copy(id = doc.id)
             }
-            _news.value = posts
+            val orderedPosts = applyCustomOrder(posts)
+            _news.value = orderedPosts
             _currentSource.value = NewsSource.FIRESTORE_LIVE
             _statusMessage.value = "Live news: ${posts.size} stories published on Cloud Firestore"
             _lastSyncTime.value = System.currentTimeMillis()
