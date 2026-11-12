@@ -7,6 +7,7 @@ import com.google.firebase.firestore.IgnoreExtraProperties
 import com.google.firebase.firestore.ServerTimestamp
 
 @Immutable
+@IgnoreExtraProperties
 data class ModApp(
     val id: String = "",
     val name: String = "",
@@ -33,6 +34,7 @@ data class ModApp(
 )
 
 @Immutable
+@IgnoreExtraProperties
 data class UserNotification(
     val id: String = "",
     val title: String = "",
@@ -45,6 +47,7 @@ data class UserNotification(
 )
 
 @Immutable
+@IgnoreExtraProperties
 data class AppUpdateConfig(
     val storeLatestVersion: String = "1.0.0",
     val storeLatestVersionCode: Int = 1,
@@ -96,6 +99,7 @@ enum class NewsType {
 }
 
 @Immutable
+@IgnoreExtraProperties
 data class NewsPost(
     val id: String = "",
     val title: String = "",

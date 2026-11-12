@@ -41,6 +41,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -197,6 +198,17 @@ fun MainAppContent(
     // Downloads States from DownloadsViewModel
     val downloadTasks by downloadsViewModel.tasks.collectAsState()
     val activeDownloads by downloadsViewModel.activeDownloads.collectAsState()
+
+    // Verify Firebase App Configuration on startup (detect dummy credentials)
+    val isFirebaseProperlyConfigured = remember(context) {
+        try {
+            val options = com.google.firebase.FirebaseOptions.fromResource(context)
+            val apiKey = options?.apiKey ?: ""
+            !apiKey.startsWith("AIzaSyDummy") && apiKey.isNotBlank()
+        } catch (_: Exception) {
+            false
+        }
+    }
 
     // User auth state tracking
     var currentUser by remember { mutableStateOf(Firebase.auth.currentUser) }
@@ -431,6 +443,40 @@ fun MainAppContent(
                             },
                             onIsScrollingChanged = { isListScrolling = it }
                         )
+                    }
+
+                    // Developer warning banner when running with placeholder dummy credentials
+                    AnimatedVisibility(
+                        visible = !isFirebaseProperlyConfigured,
+                        enter = slideInVertically(initialOffsetY = { -it }) + fadeIn(),
+                        exit = slideOutVertically(targetOffsetY = { -it }) + fadeOut(),
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .statusBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 6.dp)
+                            .zIndex(15f)
+                    ) {
+                        Card(
+                            shape = RoundedCornerShape(12.dp),
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                                Spacer(modifier = Modifier.width(10.dp))
+                                Text(
+                                    text = "Firebase not configured: missing real google-services.json",
+                                    style = MaterialTheme.typography.bodySmall.copy(
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onErrorContainer
+                                    )
+                                )
+                            }
+                        }
                     }
 
                     // Floating In-App Broadcast Notification Banner

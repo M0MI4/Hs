@@ -16,6 +16,7 @@ import com.example.data.repository.CatalogRepository
 import com.example.data.repository.NewsRepository
 import com.example.data.repository.UpdateRepository
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestoreException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -274,13 +275,20 @@ class AdminViewModel(
             if (result.isSuccess) {
                 _adminState.value = _adminState.value.copy(
                     isLoading = false,
-                    successMessage = "App '${app.name}' successfully published to Firestore!"
+                    successMessage = "App '${app.name}' successfully published to Firestore (/apps)!"
                 )
                 onComplete()
             } else {
+                val ex = result.exceptionOrNull()
+                val errorMsg = if (ex is FirebaseFirestoreException) {
+                    "Firestore [${ex.code}]: ${ex.localizedMessage ?: "Write permission denied"}"
+                } else {
+                    ex?.localizedMessage ?: "Failed to save app to Firestore."
+                }
+                Log.e("AdminViewModel", "saveApp failed: $errorMsg", ex)
                 _adminState.value = _adminState.value.copy(
                     isLoading = false,
-                    errorMessage = result.exceptionOrNull()?.localizedMessage ?: "Failed to save app"
+                    errorMessage = errorMsg
                 )
             }
         }
@@ -290,11 +298,23 @@ class AdminViewModel(
         viewModelScope.launch {
             _adminState.value = _adminState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
             val result = catalogRepository.deleteApp(appId)
-            _adminState.value = _adminState.value.copy(
-                isLoading = false,
-                errorMessage = result.exceptionOrNull()?.localizedMessage,
-                successMessage = if (result.isSuccess) "Deleted '$appName' from catalog" else null
-            )
+            if (result.isSuccess) {
+                _adminState.value = _adminState.value.copy(
+                    isLoading = false,
+                    successMessage = "Deleted '$appName' from catalog"
+                )
+            } else {
+                val ex = result.exceptionOrNull()
+                val errorMsg = if (ex is FirebaseFirestoreException) {
+                    "Firestore [${ex.code}]: ${ex.localizedMessage ?: "Delete permission denied"}"
+                } else {
+                    ex?.localizedMessage ?: "Failed to delete app."
+                }
+                _adminState.value = _adminState.value.copy(
+                    isLoading = false,
+                    errorMessage = errorMsg
+                )
+            }
         }
     }
 
@@ -309,9 +329,16 @@ class AdminViewModel(
                 )
                 onComplete()
             } else {
+                val ex = result.exceptionOrNull()
+                val errorMsg = if (ex is FirebaseFirestoreException) {
+                    "Firestore [${ex.code}]: ${ex.localizedMessage ?: "Broadcast permission denied"}"
+                } else {
+                    ex?.localizedMessage ?: "Failed to broadcast story"
+                }
+                Log.e("AdminViewModel", "saveNews failed: $errorMsg", ex)
                 _adminState.value = _adminState.value.copy(
                     isLoading = false,
-                    errorMessage = result.exceptionOrNull()?.localizedMessage ?: "Failed to broadcast story"
+                    errorMessage = errorMsg
                 )
             }
         }
@@ -321,11 +348,23 @@ class AdminViewModel(
         viewModelScope.launch {
             _adminState.value = _adminState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
             val result = newsRepository.deleteNews(newsId)
-            _adminState.value = _adminState.value.copy(
-                isLoading = false,
-                errorMessage = result.exceptionOrNull()?.localizedMessage,
-                successMessage = if (result.isSuccess) "Story deleted from Firestore" else null
-            )
+            if (result.isSuccess) {
+                _adminState.value = _adminState.value.copy(
+                    isLoading = false,
+                    successMessage = "Story deleted from Firestore"
+                )
+            } else {
+                val ex = result.exceptionOrNull()
+                val errorMsg = if (ex is FirebaseFirestoreException) {
+                    "Firestore [${ex.code}]: ${ex.localizedMessage ?: "Delete permission denied"}"
+                } else {
+                    ex?.localizedMessage ?: "Failed to delete story."
+                }
+                _adminState.value = _adminState.value.copy(
+                    isLoading = false,
+                    errorMessage = errorMsg
+                )
+            }
         }
     }
 

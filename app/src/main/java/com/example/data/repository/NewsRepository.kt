@@ -6,6 +6,8 @@ import com.example.R
 import com.example.data.model.NewsPost
 import com.example.data.model.NewsType
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.squareup.moshi.Moshi
@@ -85,9 +87,10 @@ class NewsRepository(
 
     fun getNewsStream(): Flow<List<NewsPost>> = callbackFlow {
         val listenerRegistration = newsCollection
-            .orderBy("date", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, error ->
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
                 if (error != null) {
+                    Log.e("NewsRepository", "Firestore /news stream error: ${error.code} - ${error.message}", error)
+                    _statusMessage.value = "Firestore News Error: ${error.code} (${error.localizedMessage})"
                     close(error)
                     return@addSnapshotListener
                 }
@@ -104,11 +107,11 @@ class NewsRepository(
     private fun startRealtimeNewsSync() {
         scope.launch {
             _isRefreshing.value = true
-            newsCollection.addSnapshotListener { snapshot, error ->
+            newsCollection.addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
                 _isRefreshing.value = false
                 if (error != null) {
-                    Log.w("NewsRepository", "Firestore /news listener error: ${error.message}")
-                    _statusMessage.value = "Offline mode: loaded local stories"
+                    Log.e("NewsRepository", "Firestore /news listener error: ${error.code} - ${error.message}", error)
+                    _statusMessage.value = "Firestore News Error: ${error.code} (${error.localizedMessage})"
                     return@addSnapshotListener
                 }
 

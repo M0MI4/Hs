@@ -746,6 +746,8 @@ private fun AppEditorBottomSheet(
         }
     }
 
+    val adminState by adminViewModel.adminState.collectAsState()
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -772,6 +774,37 @@ private fun AppEditorBottomSheet(
 
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = "Close")
+                }
+            }
+
+            // Error banner inside edit sheet
+            AnimatedVisibility(visible = adminState.errorMessage != null) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = iOSSystemRed.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, iOSSystemRed.copy(alpha = 0.4f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = iOSSystemRed, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = adminState.errorMessage ?: "",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium),
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { adminViewModel.clearMessages() },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Dismiss", modifier = Modifier.size(16.dp))
+                        }
+                    }
                 }
             }
 
@@ -1083,15 +1116,22 @@ private fun AppEditorBottomSheet(
                         onSaved()
                     }
                 },
+                enabled = !adminState.isLoading,
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
             ) {
-                Icon(Icons.Default.CloudUpload, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (isEditMode) "Save Changes to Firestore" else "Publish App to Store", fontWeight = FontWeight.Bold)
+                if (adminState.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Publishing to Firestore...", fontWeight = FontWeight.Bold)
+                } else {
+                    Icon(Icons.Default.CloudUpload, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (isEditMode) "Save Changes to Firestore" else "Publish App to Store", fontWeight = FontWeight.Bold)
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1613,6 +1653,8 @@ private fun NewsEditorBottomSheet(
     val tags = listOf("Update", "Feature", "Notice", "Event", "Security", "Patch")
     val newsTypes = listOf(NewsType.TEXT_ONLY, NewsType.BANNER, NewsType.PATCH_NOTES, NewsType.SPOTLIGHT)
 
+    val adminState by adminViewModel.adminState.collectAsState()
+
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -1639,6 +1681,37 @@ private fun NewsEditorBottomSheet(
 
                 IconButton(onClick = onDismiss) {
                     Icon(Icons.Default.Close, contentDescription = "Close")
+                }
+            }
+
+            // Error banner inside news edit sheet
+            AnimatedVisibility(visible = adminState.errorMessage != null) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = iOSSystemRed.copy(alpha = 0.12f),
+                    border = BorderStroke(1.dp, iOSSystemRed.copy(alpha = 0.4f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(Icons.Default.ErrorOutline, contentDescription = null, tint = iOSSystemRed, modifier = Modifier.size(20.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = adminState.errorMessage ?: "",
+                            style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium),
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { adminViewModel.clearMessages() },
+                            modifier = Modifier.size(24.dp)
+                        ) {
+                            Icon(Icons.Default.Close, contentDescription = "Dismiss", modifier = Modifier.size(16.dp))
+                        }
+                    }
                 }
             }
 
@@ -1829,15 +1902,22 @@ private fun NewsEditorBottomSheet(
                         onSaved()
                     }
                 },
+                enabled = !adminState.isLoading,
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
             ) {
-                Icon(Icons.Default.CloudUpload, contentDescription = null)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(if (isEditMode) "Save Changes to News" else "Publish Story to Firestore", fontWeight = FontWeight.Bold)
+                if (adminState.isLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Broadcasting to Firestore...", fontWeight = FontWeight.Bold)
+                } else {
+                    Icon(Icons.Default.CloudUpload, contentDescription = null)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(if (isEditMode) "Save Changes to News" else "Publish Story to Firestore", fontWeight = FontWeight.Bold)
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))

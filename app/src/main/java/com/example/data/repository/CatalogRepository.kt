@@ -7,6 +7,8 @@ import com.example.data.local.AppDatabase
 import com.example.data.local.ModAppEntity
 import com.example.data.model.ModApp
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.MetadataChanges
 import com.google.firebase.firestore.Query
 import com.google.firebase.firestore.SetOptions
 import com.squareup.moshi.Moshi
@@ -84,10 +86,10 @@ class CatalogRepository(
      */
     fun getAppsStream(): Flow<List<ModApp>> = callbackFlow {
         val listenerRegistration = appsCollection
-            .orderBy("downloadsCount", Query.Direction.DESCENDING)
-            .addSnapshotListener { snapshot, error ->
+            .addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
                 if (error != null) {
-                    Log.w("CatalogRepo", "Firestore snapshot listener error: ${error.message}")
+                    Log.e("CatalogRepo", "Firestore snapshot listener error: ${error.code} - ${error.message}", error)
+                    _statusMessage.value = "Firestore Error: ${error.code} (${error.localizedMessage})"
                     close(error)
                     return@addSnapshotListener
                 }
@@ -128,11 +130,11 @@ class CatalogRepository(
     private fun startRealtimeFirestoreSync() {
         scope.launch {
             _isLoading.value = true
-            appsCollection.addSnapshotListener { snapshot, error ->
+            appsCollection.addSnapshotListener(MetadataChanges.INCLUDE) { snapshot, error ->
                 _isLoading.value = false
                 if (error != null) {
-                    Log.w("CatalogRepo", "Firestore /apps listener warning: ${error.message}")
-                    _statusMessage.value = "Offline mode: using local cache (${error.localizedMessage})"
+                    Log.e("CatalogRepo", "Firestore /apps listener error: ${error.code} - ${error.message}", error)
+                    _statusMessage.value = "Firestore Error: ${error.code} (${error.localizedMessage})"
                     return@addSnapshotListener
                 }
 

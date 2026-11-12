@@ -1,40 +1,38 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    // Helper functions
-    function isAuthenticated() {
-      return request.auth != null;
+    function isAdmin() {
+      return request.auth != null && (
+        request.auth.token.email == "momiadesigner@gmail.com" ||
+        request.auth.token.email == "kakmomia@gmail.com" ||
+        request.auth.token.admin == true ||
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
     }
 
-    // Public catalog collections - Open read and write for app management
     match /apps/{appId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
 
     match /news/{newsId} {
-      allow read, write: if true;
+      allow read: if true;
+      allow create, update, delete: if isAdmin();
     }
 
-    match /config/{configDoc} {
-      allow read, write: if true;
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isAdmin();
     }
 
-    // Admin whitelist collection
     match /admins/{adminId} {
-      allow read, write: if true;
+      allow read, write: if isAdmin();
     }
 
-    // User-scoped private data (bookmarks, download history)
-    match /users/{userId} {
-      allow read, write: if true;
-
-      match /{allSubcollections=**} {
-        allow read, write: if true;
-      }
+    match /users/{userId}/{allSubcollections=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
     }
 
-    // Community feedback
     match /feedback/{feedbackId} {
       allow read, write: if true;
     }

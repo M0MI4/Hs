@@ -18,6 +18,7 @@
 -keepclassmembers class * {
     @com.google.firebase.firestore.DocumentId <fields>;
     @com.google.firebase.firestore.ServerTimestamp <fields>;
+    @com.google.firebase.firestore.PropertyName <fields>;
     @com.google.firebase.firestore.PropertyName <methods>;
 }
 
