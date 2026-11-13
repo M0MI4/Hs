@@ -60,4 +60,36 @@ class ExampleRobolectricTest {
     val vm = com.example.ui.admin.AdminViewModel(application)
     assertEquals(false, vm.adminState.value.isAdminLoggedIn)
   }
+
+  @Test
+  fun `localization keys exist for mini download bar and detail sheet in English and Kurdish`() {
+    val keys = listOf(
+      "downloads_active_section",
+      "downloads_action_view",
+      "detail_downloads",
+      "detail_version",
+      "detail_size_category",
+      "detail_tab_features",
+      "detail_tab_changelog",
+      "detail_uninstall_note"
+    )
+    for (k in keys) {
+      val enVal = com.example.ui.i18n.LocalizedStrings.get(k, com.example.ui.i18n.AppLanguage.ENGLISH)
+      val kuVal = com.example.ui.i18n.LocalizedStrings.get(k, com.example.ui.i18n.AppLanguage.KURDISH_SORANI)
+      assertEquals(false, enVal == k)
+      assertEquals(false, kuVal == k)
+    }
+    assertEquals("Downloading", com.example.ui.i18n.LocalizedStrings.get("downloads_active_section", com.example.ui.i18n.AppLanguage.ENGLISH))
+    assertEquals("دادەبەزێت", com.example.ui.i18n.LocalizedStrings.get("downloads_active_section", com.example.ui.i18n.AppLanguage.KURDISH_SORANI))
+    assertEquals("View", com.example.ui.i18n.LocalizedStrings.get("downloads_action_view", com.example.ui.i18n.AppLanguage.ENGLISH))
+    assertEquals("پیشاندان", com.example.ui.i18n.LocalizedStrings.get("downloads_action_view", com.example.ui.i18n.AppLanguage.KURDISH_SORANI))
+  }
+
+  @Test
+  fun `mod app defaults downloadCount to zero and optional flags to false or empty`() {
+    val app = com.example.data.model.ModApp(id = "snap", name = "Snapchat Prime")
+    assertEquals(0L, app.downloadCount)
+    assertEquals(false, app.requiresUninstallOfficial)
+    assertEquals("", app.glowColorHex)
+  }
 }

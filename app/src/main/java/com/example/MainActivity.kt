@@ -72,6 +72,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -284,16 +285,25 @@ fun MainAppContent(
                                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { settingsViewModel.setTab(MainTab.DOWNLOADS) }
                                     .padding(horizontal = 12.dp)
+                                    .height(56.dp)
+                                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                                    .clickable { settingsViewModel.setTab(MainTab.DOWNLOADS) }
                             ) {
-                                Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp)) {
+                                Column(
+                                    modifier = Modifier
+                                        .fillMaxSize()
+                                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                                    verticalArrangement = Arrangement.Center
+                                ) {
                                     Row(
                                         modifier = Modifier.fillMaxWidth(),
-                                        horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Row(
+                                            modifier = Modifier.weight(1f),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
                                             Icon(
                                                 imageVector = Icons.Default.Download,
                                                 contentDescription = null,
@@ -303,18 +313,24 @@ fun MainAppContent(
                                             Spacer(modifier = Modifier.width(6.dp))
                                             Text(
                                                 text = "${LocalizedStrings.get("downloads_active_section", currentLanguage)}: ${active.appName} (${(active.progress * 100).toInt()}%)",
-                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold)
+                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                modifier = Modifier.weight(1f)
                                             )
                                         }
+                                        Spacer(modifier = Modifier.width(10.dp))
                                         Text(
                                             text = LocalizedStrings.get("downloads_action_view", currentLanguage),
                                             style = MaterialTheme.typography.labelSmall.copy(
                                                 color = MaterialTheme.colorScheme.primary,
                                                 fontWeight = FontWeight.Bold
-                                            )
+                                            ),
+                                            maxLines = 1,
+                                            softWrap = false
                                         )
                                     }
-                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Spacer(modifier = Modifier.height(6.dp))
                                     LinearProgressIndicator(
                                         progress = { active.progress },
                                         modifier = Modifier
@@ -555,7 +571,13 @@ fun MainAppContent(
                                             contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
                                             modifier = Modifier.height(32.dp)
                                         ) {
-                                            Text("View", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                            Text(
+                                                text = LocalizedStrings.get("downloads_action_view", currentLanguage),
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                softWrap = false
+                                            )
                                         }
                                     }
 
@@ -583,6 +605,7 @@ fun MainAppContent(
             if (selectedAppForDetail != null) {
                 AppDetailSheet(
                     app = selectedAppForDetail!!,
+                    currentLanguage = currentLanguage,
                     onDismiss = { storeViewModel.selectAppForDetail(null) },
                     onStartDownload = {
                         val app = selectedAppForDetail!!

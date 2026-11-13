@@ -302,7 +302,8 @@ fun AppsScreen(
                                     isBookmarked = bookmarkedIds.contains(app.id),
                                     onAppClick = { onAppSelected(app) },
                                     onDownloadClick = { onDownloadApp(app) },
-                                    onBookmarkToggle = { onBookmarkToggle(app) }
+                                    onBookmarkToggle = { onBookmarkToggle(app) },
+                                    currentLanguage = currentLanguage
                                 )
                             }
 

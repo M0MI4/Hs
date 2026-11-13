@@ -2,7 +2,6 @@ package com.example.ui.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -14,10 +13,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Security
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
@@ -27,23 +26,25 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
-import coil.request.ImageRequest
-import com.example.util.AppInstallState
-import com.example.util.InstallStatusHelper
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.example.data.model.ModApp
+import com.example.ui.i18n.AppLanguage
+import com.example.ui.i18n.LocalizedStrings
 import com.example.ui.theme.VerifiedBadgeGreen
+import com.example.util.AppInstallState
+import com.example.util.InstallStatusHelper
 
 // Top-level static shapes to eliminate per-frame allocations during scrolling
 private val ModCardShape = RoundedCornerShape(16.dp)
@@ -56,7 +57,8 @@ fun ModAppCard(
     onAppClick: () -> Unit,
     onDownloadClick: () -> Unit,
     onBookmarkToggle: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    currentLanguage: AppLanguage = AppLanguage.ENGLISH
 ) {
     val context = LocalContext.current
     val installState = remember(app.packageName, app.versionCode) {
@@ -67,8 +69,15 @@ fun ModAppCard(
         "${app.author} • ${app.category}"
     }
 
-    val ratingText = remember(app.rating) {
-        "%.1f".format(app.rating)
+    val downloadsUnit = LocalizedStrings.get("card_downloads_unit", currentLanguage)
+    val metaStatsText = remember(app.version, app.downloadCount, app.sizeDisplay, downloadsUnit) {
+        "v${app.version} • ${app.downloadCount} $downloadsUnit • ${app.sizeDisplay}"
+    }
+
+    val actionButtonText = when (installState) {
+        AppInstallState.GET -> LocalizedStrings.get("action_get", currentLanguage)
+        AppInstallState.UPDATE -> LocalizedStrings.get("action_update", currentLanguage)
+        AppInstallState.OPEN -> LocalizedStrings.get("action_open", currentLanguage)
     }
 
     val modFeaturesText = remember(app.modFeatures) {
@@ -102,7 +111,7 @@ fun ModAppCard(
             .clickable(onClick = onAppClick)
             .testTag("mod_card_${app.id}")
     ) {
-        Column(modifier = Modifier.padding(14.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -110,7 +119,7 @@ fun ModAppCard(
                 // iOS App Icon (Squircle shape)
                 Box(
                     modifier = Modifier
-                        .size(62.dp)
+                        .size(58.dp)
                         .clip(ModIconSquircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant),
                     contentAlignment = Alignment.Center
@@ -119,7 +128,7 @@ fun ModAppCard(
                         AsyncImage(
                             model = imageRequest,
                             contentDescription = "${app.name} icon",
-                            modifier = Modifier.size(62.dp),
+                            modifier = Modifier.size(58.dp),
                             contentScale = ContentScale.Crop
                         )
                     } else {
@@ -127,12 +136,12 @@ fun ModAppCard(
                             imageVector = Icons.Default.Security,
                             contentDescription = null,
                             tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp)
+                            modifier = Modifier.size(30.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(14.dp))
+                Spacer(modifier = Modifier.width(10.dp))
 
                 // App Details
                 Column(modifier = Modifier.weight(1f)) {
@@ -141,9 +150,10 @@ fun ModAppCard(
                             text = app.name,
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                fontSize = 16.sp
+                                fontSize = 15.5.sp,
+                                lineHeight = 19.sp
                             ),
-                            maxLines = 1,
+                            maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false)
                         )
@@ -153,7 +163,7 @@ fun ModAppCard(
                                 imageVector = Icons.Default.VerifiedUser,
                                 contentDescription = "Verified Mod",
                                 tint = VerifiedBadgeGreen,
-                                modifier = Modifier.size(15.dp)
+                                modifier = Modifier.size(14.dp)
                             )
                         }
                     }
@@ -174,35 +184,31 @@ fun ModAppCard(
 
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Default.Star,
+                            imageVector = Icons.Default.Download,
                             contentDescription = null,
-                            tint = Color(0xFFFF9500),
+                            tint = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.size(12.dp)
                         )
-                        Spacer(modifier = Modifier.width(2.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
-                            text = ratingText,
-                            style = MaterialTheme.typography.labelSmall.copy(
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 11.sp
-                            )
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Text(
-                            text = "• ${app.sizeDisplay}",
+                            text = metaStatsText,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium,
                                 fontSize = 11.sp
-                            )
+                            ),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 // Dynamic Action Capsule Button (GET, UPDATE, OPEN)
                 CupertinoGetButton(
-                    text = installState.label,
+                    text = actionButtonText,
+                    horizontalPadding = 12.dp,
                     onClick = {
                         if (installState == AppInstallState.OPEN) {
                             val launched = InstallStatusHelper.launchInstalledApp(context, app.packageName)
@@ -217,7 +223,7 @@ fun ModAppCard(
                 IconButton(
                     onClick = onBookmarkToggle,
                     modifier = Modifier
-                        .size(36.dp)
+                        .size(32.dp)
                         .testTag("bookmark_btn_${app.id}")
                 ) {
                     Icon(
@@ -234,7 +240,7 @@ fun ModAppCard(
                 Divider(
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f),
                     thickness = 0.5.dp,
-                    modifier = Modifier.padding(start = 76.dp)
+                    modifier = Modifier.padding(start = 68.dp)
                 )
                 Spacer(modifier = Modifier.height(6.dp))
                 Text(
@@ -246,7 +252,7 @@ fun ModAppCard(
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(start = 76.dp)
+                    modifier = Modifier.padding(start = 68.dp)
                 )
             }
         }

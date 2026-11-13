@@ -26,7 +26,10 @@ data class ModAppEntity(
     val author: String,
     val updatedDate: String,
     val permissionsRequired: List<String>,
-    val screenshots: List<String> = emptyList()
+    val screenshots: List<String> = emptyList(),
+    val downloadCount: Long = 0L,
+    val requiresUninstallOfficial: Boolean = false,
+    val glowColorHex: String = ""
 ) {
     fun toDomain(): ModApp {
         return ModApp(
@@ -50,7 +53,10 @@ data class ModAppEntity(
             author = author,
             updatedDate = updatedDate,
             permissionsRequired = permissionsRequired,
-            screenshots = screenshots
+            screenshots = screenshots,
+            downloadCount = downloadCount,
+            requiresUninstallOfficial = requiresUninstallOfficial,
+            glowColorHex = glowColorHex
         )
     }
 
@@ -77,7 +83,10 @@ data class ModAppEntity(
                 author = app.author,
                 updatedDate = app.updatedDate,
                 permissionsRequired = app.permissionsRequired,
-                screenshots = app.screenshots
+                screenshots = app.screenshots,
+                downloadCount = app.downloadCount,
+                requiresUninstallOfficial = app.requiresUninstallOfficial,
+                glowColorHex = app.glowColorHex
             )
         }
     }

@@ -30,7 +30,10 @@ data class ModApp(
     val updatedDate: String = "",
     val permissionsRequired: List<String> = emptyList(),
     val sortOrder: Int = 0,
-    val screenshots: List<String> = emptyList()
+    val screenshots: List<String> = emptyList(),
+    val downloadCount: Long = 0L,
+    val requiresUninstallOfficial: Boolean = false,
+    val glowColorHex: String = ""
 )
 
 @Immutable

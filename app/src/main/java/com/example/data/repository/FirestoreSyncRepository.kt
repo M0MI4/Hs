@@ -125,6 +125,18 @@ class FirestoreSyncRepository(
         }
     }
 
+    suspend fun incrementAppDownloadCount(appId: String) {
+        if (appId.isBlank() || appId == "app_hsstore_update") return
+        val docRef = db.collection("apps").document(appId)
+        try {
+            docRef.update("downloadCount", FieldValue.increment(1L)).await()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            // Non-fatal telemetry update (e.g., offline or local bundled item not yet seeded)
+        }
+    }
+
     // 3. Observe Remote Device Configs
     fun observeDeviceConfigs(): Flow<List<DeviceConfigItem>> = flow {
         val uid = requireUserId()

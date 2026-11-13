@@ -99,7 +99,7 @@ fun DashboardScreen(
             }
         }
         when (selectedSort) {
-            SortOption.POPULAR -> list.sortedByDescending { it.downloadsCount }
+            SortOption.POPULAR -> list.sortedByDescending { maxOf(it.downloadCount, it.downloadsCount.toLong()) }
             SortOption.RATING -> list.sortedByDescending { it.rating }
             SortOption.SIZE -> list.sortedBy { it.sizeBytes }
             SortOption.RECENT -> list.sortedByDescending { it.versionCode }

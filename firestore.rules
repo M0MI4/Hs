@@ -12,7 +12,12 @@ service cloud.firestore {
 
     match /apps/{appId} {
       allow read: if true;
-      allow create, update, delete: if isAdmin();
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin() || (
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['downloadCount']) &&
+        request.resource.data.downloadCount is int &&
+        request.resource.data.downloadCount == (resource.data.get('downloadCount', 0) + 1)
+      );
     }
 
     match /news/{newsId} {

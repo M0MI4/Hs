@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.iOSGetButtonText
@@ -110,7 +111,8 @@ fun CupertinoGetButton(
     text: String = "GET",
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
-    isHighlighted: Boolean = false
+    isHighlighted: Boolean = false,
+    horizontalPadding: Dp = 16.dp
 ) {
     Surface(
         onClick = onClick,
@@ -122,7 +124,7 @@ fun CupertinoGetButton(
             .testTag("cupertino_get_btn")
     ) {
         Box(
-            modifier = Modifier.padding(horizontal = 16.dp),
+            modifier = Modifier.padding(horizontal = horizontalPadding),
             contentAlignment = Alignment.Center
         ) {
             Text(
@@ -131,7 +133,9 @@ fun CupertinoGetButton(
                     fontWeight = FontWeight.Black,
                     fontSize = 12.sp,
                     letterSpacing = 0.5.sp
-                )
+                ),
+                maxLines = 1,
+                softWrap = false
             )
         }
     }

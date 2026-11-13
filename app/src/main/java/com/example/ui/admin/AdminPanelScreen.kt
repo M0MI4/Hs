@@ -648,7 +648,7 @@ private fun AdminAppItemCard(
                 )
 
                 Text(
-                    text = "Category: ${app.category} • Downloads: ${app.downloadsCount}",
+                    text = "Category: ${app.category} • Downloads: ${app.downloadCount}",
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = MaterialTheme.colorScheme.primary,
                         fontSize = 11.sp
@@ -706,11 +706,22 @@ private fun AppEditorBottomSheet(
     var modFeaturesText by remember { mutableStateOf(app?.modFeatures?.joinToString("\n") ?: "") }
     var author by remember { mutableStateOf(app?.author ?: "Hama Sade Team") }
     var isVerified by remember { mutableStateOf(app?.isVerified ?: true) }
+    var requiresUninstallOfficial by remember(app) { mutableStateOf(app?.requiresUninstallOfficial ?: false) }
+    var glowColorHex by remember(app) { mutableStateOf(app?.glowColorHex ?: "") }
     var isParsingApk by remember { mutableStateOf(false) }
     var screenshotsList by remember(app) { mutableStateOf(app?.screenshots ?: emptyList()) }
     var screenshotInputUrl by remember { mutableStateOf("") }
 
     val categories = listOf("Apps", "Games", "Tools", "Emulators", "Media", "Tweaks")
+    val glowPresets = listOf(
+        "None" to "",
+        "Yellow" to "#FFD60A",
+        "Blue" to "#0A84FF",
+        "Purple" to "#BF5AF2",
+        "Green" to "#30D158",
+        "Red" to "#FF453A",
+        "Cyan" to "#64D2FF"
+    )
 
     // Android APK File Picker
     val apkPickerLauncher = rememberLauncherForActivityResult(
@@ -854,6 +865,16 @@ private fun AppEditorBottomSheet(
                         value = packageName,
                         onValueChange = { packageName = it },
                         label = { Text("Package Name (e.g. com.app.mod) *") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                item {
+                    OutlinedTextField(
+                        value = author,
+                        onValueChange = { author = it },
+                        label = { Text("Author / Developer") },
+                        singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
@@ -1070,6 +1091,58 @@ private fun AppEditorBottomSheet(
                 }
 
                 item {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                            .padding(12.dp)
+                    ) {
+                        Text(
+                            text = "Ambient Glow Color Behind Icon",
+                            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            items(glowPresets) { (label, hex) ->
+                                val isSelected = glowColorHex.equals(hex, ignoreCase = true)
+                                FilterChip(
+                                    selected = isSelected,
+                                    onClick = { glowColorHex = hex },
+                                    leadingIcon = if (hex.isNotBlank()) {
+                                        {
+                                            val dotColor = try {
+                                                Color(android.graphics.Color.parseColor(hex))
+                                            } catch (_: Exception) {
+                                                Color.Transparent
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .size(12.dp)
+                                                    .clip(CircleShape)
+                                                    .background(dotColor)
+                                            )
+                                        }
+                                    } else null,
+                                    label = { Text(label, fontSize = 12.sp) }
+                                )
+                            }
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        OutlinedTextField(
+                            value = glowColorHex,
+                            onValueChange = { glowColorHex = it },
+                            label = { Text("Custom Glow Hex (e.g. #FFD60A, optional)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+
+                item {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1080,6 +1153,31 @@ private fun AppEditorBottomSheet(
                             checked = isVerified,
                             onCheckedChange = { isVerified = it },
                             colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = VerifiedBadgeGreen)
+                        )
+                    }
+                }
+
+                item {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                            Text("Requires Uninstalling Official App", fontWeight = FontWeight.Medium)
+                            Text(
+                                text = "Shows a bilingual warning note inside app details",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Switch(
+                            checked = requiresUninstallOfficial,
+                            onCheckedChange = { requiresUninstallOfficial = it },
+                            colors = SwitchDefaults.colors(
+                                checkedThumbColor = Color.White,
+                                checkedTrackColor = Color(0xFFFF9500)
+                            )
                         )
                     }
                 }
@@ -1108,8 +1206,11 @@ private fun AppEditorBottomSheet(
                         sha256 = sha256.trim(),
                         description = description.trim(),
                         modFeatures = features,
-                        author = author.trim(),
+                        author = author.trim().ifBlank { "Hama Sade Team" },
                         isVerified = isVerified,
+                        requiresUninstallOfficial = requiresUninstallOfficial,
+                        glowColorHex = glowColorHex.trim(),
+                        downloadCount = app?.downloadCount ?: 0L,
                         updatedDate = System.currentTimeMillis().toString()
                     )
                     adminViewModel.saveApp(newApp) {

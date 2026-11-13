@@ -328,7 +328,7 @@ class CatalogRepository(
 
         // Sorting
         return when (sortOption) {
-            SortOption.POPULAR -> result.sortedByDescending { it.downloadsCount }
+            SortOption.POPULAR -> result.sortedByDescending { maxOf(it.downloadCount, it.downloadsCount.toLong()) }
             SortOption.RATING -> result.sortedByDescending { it.rating }
             SortOption.SIZE -> result.sortedBy { it.sizeBytes }
             SortOption.RECENT -> result.sortedByDescending { it.versionCode }
