@@ -204,4 +204,100 @@ class ExampleRobolectricTest {
     )
     assertEquals(com.example.util.AppInstallState.SIGNATURE_MISMATCH, mismatchState)
   }
+
+  @Test
+  fun `kurdish sorani date formatter returns Sorani script instead of Kurmanji Latin`() {
+    val cal = java.util.Calendar.getInstance().apply {
+      set(2026, java.util.Calendar.NOVEMBER, 14, 12, 0, 0)
+    }
+    val kuDate = com.example.ui.i18n.formatLocalizedTodayDate(
+      language = com.example.ui.i18n.AppLanguage.KURDISH_SORANI,
+      timeMillis = cal.timeInMillis
+    )
+    assertEquals("شەممە، ١٤ی تشرینی دووەم", kuDate)
+    assertEquals(false, kuDate.contains("ŞEMÎ", ignoreCase = true))
+    assertEquals(false, kuDate.contains("MIJDAR", ignoreCase = true))
+
+    val enDate = com.example.ui.i18n.formatLocalizedTodayDate(
+      language = com.example.ui.i18n.AppLanguage.ENGLISH,
+      timeMillis = cal.timeInMillis
+    )
+    assertEquals("SATURDAY, NOVEMBER 14", enDate)
+  }
+
+  @Test
+  fun `kurdish typography applies KurdishFontFamily and zero letterSpacing across all styles`() {
+    val kuType = com.example.ui.theme.hsStoreTypography(isKurdish = true)
+    val zeroSp = androidx.compose.ui.unit.TextUnit(0f, androidx.compose.ui.unit.TextUnitType.Sp)
+    val styles = listOf(
+      kuType.displayLarge,
+      kuType.headlineLarge,
+      kuType.headlineMedium,
+      kuType.titleLarge,
+      kuType.titleMedium,
+      kuType.titleSmall,
+      kuType.bodyLarge,
+      kuType.bodyMedium,
+      kuType.bodySmall,
+      kuType.labelLarge,
+      kuType.labelMedium,
+      kuType.labelSmall
+    )
+    for (style in styles) {
+      assertEquals(com.example.ui.theme.KurdishFontFamily, style.fontFamily)
+      assertEquals(zeroSp, style.letterSpacing)
+    }
+
+    val enType = com.example.ui.theme.hsStoreTypography(isKurdish = false)
+    assertEquals(androidx.compose.ui.text.font.FontFamily.Default, enType.bodyLarge.fontFamily)
+  }
+
+  @Test
+  fun `downloads viewModel auto-installs pending replace only after package uninstall completes`() {
+    val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+    if (com.google.firebase.FirebaseApp.getApps(app).isEmpty()) {
+      try {
+        com.google.firebase.FirebaseApp.initializeApp(
+          app,
+          com.google.firebase.FirebaseOptions.Builder()
+            .setApplicationId("com.aistudio.hsstore.modapk")
+            .setProjectId("test-project")
+            .setApiKey("fake-api-key-for-test")
+            .build()
+        )
+      } catch (_: Exception) {}
+    }
+
+    val shadowPm = org.robolectric.Shadows.shadowOf(app.packageManager)
+    val pkgName = "com.cyberghostvpn.mod"
+    val pkgInfo = android.content.pm.PackageInfo().apply {
+      packageName = pkgName
+      longVersionCode = 1L
+    }
+    shadowPm.installPackage(pkgInfo)
+
+    val vm = com.example.ui.viewmodel.DownloadsViewModel(app)
+    val modApp = com.example.data.model.ModApp(
+      id = "app_cyber_vpn",
+      name = "CyberGhost Pro Mod",
+      packageName = pkgName,
+      version = "8.4.2",
+      versionCode = 2
+    )
+
+    // Seeded task app_cyber_vpn already exists in DownloadRepository as COMPLETED with a real file
+    vm.initiateReplaceUninstall(app, modApp)
+    assertEquals("app_cyber_vpn", vm.pendingReplaceAppId.value)
+
+    // Still installed -> should NOT auto-install yet
+    val beforeUninstall = vm.checkAndAutoInstallPendingReplace(app, listOf(modApp))
+    assertEquals(false, beforeUninstall)
+    assertEquals("app_cyber_vpn", vm.pendingReplaceAppId.value)
+
+    // Simulate user confirming Android system uninstall dialog
+    shadowPm.removePackage(pkgName)
+    val afterUninstall = vm.checkAndAutoInstallPendingReplace(app, listOf(modApp))
+    assertEquals(true, afterUninstall)
+    assertEquals(null, vm.pendingReplaceAppId.value)
+  }
 }

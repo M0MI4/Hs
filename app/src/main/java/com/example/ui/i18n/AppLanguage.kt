@@ -1,5 +1,10 @@
 package com.example.ui.i18n
 
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
+
 enum class AppLanguage(
     val code: String,
     val displayName: String,
@@ -8,6 +13,54 @@ enum class AppLanguage(
 ) {
     ENGLISH("en", "English", "English", false),
     KURDISH_SORANI("ku", "Kurdish (Sorani)", "کوردیی سۆرانی", true)
+}
+
+private val soraniWeekdays = mapOf(
+    Calendar.SUNDAY to "یەکشەممە",
+    Calendar.MONDAY to "دووشەممە",
+    Calendar.TUESDAY to "سێشەممە",
+    Calendar.WEDNESDAY to "چوارشەممە",
+    Calendar.THURSDAY to "پێنجشەممە",
+    Calendar.FRIDAY to "هەینی",
+    Calendar.SATURDAY to "شەممە"
+)
+
+private val soraniMonths = arrayOf(
+    "کانوونی دووەم",
+    "شوبات",
+    "ئازار",
+    "نیسان",
+    "ئایار",
+    "حوزەیران",
+    "تەمموز",
+    "ئاب",
+    "ئەیلوول",
+    "تشرینی یەکەم",
+    "تشرینی دووەم",
+    "کانوونی یەکەم"
+)
+
+private fun toKurdishDigits(number: Int): String {
+    val easternDigits = charArrayOf('٠', '١', '٢', '٣', '٤', '٥', '٦', '٧', '٨', '٩')
+    return number.toString().map { ch ->
+        if (ch in '0'..'9') easternDigits[ch - '0'] else ch
+    }.joinToString("")
+}
+
+fun formatLocalizedTodayDate(
+    language: AppLanguage,
+    timeMillis: Long = System.currentTimeMillis()
+): String {
+    return if (language == AppLanguage.KURDISH_SORANI) {
+        val cal = Calendar.getInstance().apply { timeInMillis = timeMillis }
+        val dayName = soraniWeekdays[cal.get(Calendar.DAY_OF_WEEK)] ?: "شەممە"
+        val dayNum = toKurdishDigits(cal.get(Calendar.DAY_OF_MONTH))
+        val monthName = soraniMonths.getOrElse(cal.get(Calendar.MONTH)) { "" }
+        "$dayName، ${dayNum}ی $monthName"
+    } else {
+        val sdf = SimpleDateFormat("EEEE, MMMM d", Locale.ENGLISH)
+        sdf.format(Date(timeMillis)).uppercase(Locale.ENGLISH)
+    }
 }
 
 object LocalizedStrings {
@@ -96,11 +149,18 @@ object LocalizedStrings {
         "detail_action_open" to "Open Installed App",
         "detail_action_update" to "Update APK (%s)",
         "detail_action_download" to "Download APK (%s)",
-        "detail_action_replace" to "Uninstall Existing App",
-        "detail_signature_mismatch_note" to "Different signature detected (Play Store or another mod). Please uninstall the existing app first before installing this mod.",
-        "detail_uninstall_existing_btn" to "Uninstall Existing App",
+        "detail_action_install" to "Install APK",
+        "detail_action_replace" to "Uninstall & Replace App",
+        "detail_action_download_replace" to "Download & Replace (%s)",
+        "detail_signature_mismatch_note" to "Different signature detected (Play Store or another mod). Download the mod APK first, then uninstall the existing app to auto-install.",
+        "detail_signature_mismatch_ready_note" to "Mod APK downloaded and ready! Uninstall the existing app now and HsStore will install this mod automatically.",
+        "detail_uninstall_existing_btn" to "Uninstall & Auto-Install Mod",
+        "detail_download_first_replace_btn" to "Download Mod First (%s)",
         "detail_lightbox_counter" to "%d of %d",
         "detail_lightbox_hint" to "Pinch to zoom • Double tap to reset",
+        "action_pause" to "Pause",
+        "action_resume" to "Resume",
+        "action_cancel" to "Cancel",
 
         // Settings Screen
         "settings_kicker" to "PREFERENCES & ABOUT",
@@ -214,11 +274,18 @@ object LocalizedStrings {
         "detail_action_open" to "کردنەوەی بەرنامە",
         "detail_action_update" to "نوێکردنەوەی APK (%s)",
         "detail_action_download" to "داگرتنی APK (%s)",
-        "detail_action_replace" to "سڕینەوەی ئەپی کۆن",
-        "detail_signature_mismatch_note" to "تێبینی: ئەم ئەپە بە واژۆیەکی تر (وەک Play Store یان مۆدێکی تر) دامەزراوە؛ پێش دامەزراندنی ئەم مۆدە دەبێت ئەپە کۆنەکە بسڕیتەوە.",
-        "detail_uninstall_existing_btn" to "سڕینەوەی ئەپی کۆن",
+        "detail_action_install" to "دامەزراندنی APK",
+        "detail_action_replace" to "سڕینەوە و گۆڕینی ئەپ",
+        "detail_action_download_replace" to "داگرتن و گۆڕین (%s)",
+        "detail_signature_mismatch_note" to "تێبینی: ئەم ئەپە بە واژۆیەکی تر دامەزراوە. سەرەتا مۆدەکە دابگرە، پاشان ئەپە کۆنەکە بسڕەوە بۆ دامەزراندنی خۆکار.",
+        "detail_signature_mismatch_ready_note" to "فایلی مۆدەکە داگیرا و ئامادەیە! ئێستا ئەپە کۆنەکە بسڕەوە و HsStore خۆکارانە دای دەمەزرێنێت.",
+        "detail_uninstall_existing_btn" to "سڕینەوە و دامەزراندنی مۆد",
+        "detail_download_first_replace_btn" to "سەرەتا مۆدەکە دابگرە (%s)",
         "detail_lightbox_counter" to "%d لە %d",
         "detail_lightbox_hint" to "بە دوو پەنجە گەورەی بکە • دوو جار لێبدە بۆ گەڕاندنەوە",
+        "action_pause" to "وەستان",
+        "action_resume" to "بەردەوامبوون",
+        "action_cancel" to "هەڵوەشاندنەوە",
 
         // Settings Screen
         "settings_kicker" to "هەڵبژاردە و زانیاری",

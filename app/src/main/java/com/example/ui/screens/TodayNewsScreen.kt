@@ -84,6 +84,7 @@ import com.example.ui.components.CupertinoPullToRefreshBox
 import com.example.ui.components.CupertinoSearchField
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.LocalizedStrings
+import com.example.ui.i18n.formatLocalizedTodayDate
 import com.example.ui.theme.iOSSystemBlue
 import com.example.ui.theme.iOSSystemGreen
 import com.example.ui.theme.iOSSystemIndigo
@@ -93,9 +94,6 @@ import com.example.ui.theme.iOSSystemRed
 import androidx.compose.foundation.gestures.ScrollableDefaults
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 // Top-level static shapes to eliminate per-frame allocations during scroll
 private val BannerNewsShape = RoundedCornerShape(20.dp)
@@ -140,9 +138,7 @@ fun TodayNewsScreen(
     var selectedStoryForDetail by remember { mutableStateOf<NewsPost?>(null) }
 
     val todayFormatted = remember(currentLanguage) {
-        val locale = if (currentLanguage == AppLanguage.KURDISH_SORANI) Locale("ku") else Locale.getDefault()
-        val sdf = SimpleDateFormat("EEEE, MMMM d", locale)
-        sdf.format(Date()).uppercase(locale)
+        formatLocalizedTodayDate(currentLanguage)
     }
 
     // Filter and search offloaded from main thread
@@ -187,7 +183,7 @@ fun TodayNewsScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.Black,
                             fontSize = 12.sp,
-                            letterSpacing = 0.8.sp
+                            letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.8.sp
                         )
                     )
 
@@ -200,15 +196,18 @@ fun TodayNewsScreen(
                     ) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f, fill = false)
+                            modifier = Modifier.weight(1f)
                         ) {
                             Text(
                                 text = LocalizedStrings.get("today_title", currentLanguage),
                                 color = MaterialTheme.colorScheme.onBackground,
+                                maxLines = 1,
+                                softWrap = false,
+                                overflow = TextOverflow.Ellipsis,
                                 style = MaterialTheme.typography.headlineLarge.copy(
                                     fontWeight = FontWeight.Black,
                                     fontSize = 34.sp,
-                                    letterSpacing = (-0.5).sp
+                                    letterSpacing = if (currentLanguage.isRtl) 0.sp else (-0.5).sp
                                 )
                             )
 
@@ -566,12 +565,12 @@ fun BannerNewsCard(
                         color = Color.Black.copy(alpha = 0.65f)
                     ) {
                         Text(
-                            text = news.tag.uppercase(),
+                            text = if (currentLanguage.isRtl) news.tag else news.tag.uppercase(),
                             color = Color.White,
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Black,
                                 fontSize = 10.sp,
-                                letterSpacing = 0.5.sp
+                                letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.5.sp
                             ),
                             modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                         )
@@ -729,7 +728,7 @@ fun TextOnlyNewsCard(
                     }
                 ) {
                     Text(
-                        text = news.tag.uppercase(),
+                        text = if (currentLanguage.isRtl) news.tag else news.tag.uppercase(),
                         color = when {
                             news.isBreaking -> iOSSystemRed
                             news.tag.contains("SECURITY", ignoreCase = true) -> iOSSystemOrange
@@ -738,7 +737,7 @@ fun TextOnlyNewsCard(
                         style = MaterialTheme.typography.labelSmall.copy(
                             fontWeight = FontWeight.Black,
                             fontSize = 10.sp,
-                            letterSpacing = 0.5.sp
+                            letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.5.sp
                         ),
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )

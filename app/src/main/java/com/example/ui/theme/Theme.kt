@@ -22,6 +22,7 @@ enum class ThemePreset(val displayName: String, val primaryColor: Color) {
 fun HsStoreTheme(
     preset: ThemePreset = ThemePreset.APPLE_BLUE,
     darkTheme: Boolean = true,
+    isKurdish: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val primaryAccent = if (darkTheme) {
@@ -88,7 +89,7 @@ fun HsStoreTheme(
 
     MaterialTheme(
         colorScheme = colorScheme,
-        typography = Typography,
+        typography = hsStoreTypography(isKurdish = isKurdish),
         content = content
     )
 }

@@ -68,6 +68,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -139,7 +140,11 @@ class MainActivity : ComponentActivity() {
             val particlesEnabled by settingsViewModel.particlesEnabled.collectAsState()
             val particleDensity by settingsViewModel.particleDensity.collectAsState()
 
-            HsStoreTheme(preset = themePreset, darkTheme = isDarkTheme) {
+            HsStoreTheme(
+                preset = themePreset,
+                darkTheme = isDarkTheme,
+                isKurdish = currentLanguage == com.example.ui.i18n.AppLanguage.KURDISH_SORANI
+            ) {
                 MainAppContent(
                     storeViewModel = storeViewModel,
                     downloadsViewModel = downloadsViewModel,
@@ -230,12 +235,18 @@ fun MainAppContent(
         }
     }
 
+    val latestApps by rememberUpdatedState(apps)
+
     // Real-time BroadcastReceiver for package installs, updates, and uninstalls
     DisposableEffect(context) {
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 val pkg = intent?.data?.schemeSpecificPart
                 InstalledAppDetector.onPackageBroadcast(context, pkg)
+                val isReplacing = intent?.getBooleanExtra(Intent.EXTRA_REPLACING, false) == true
+                if (intent?.action == Intent.ACTION_PACKAGE_REMOVED && !isReplacing) {
+                    downloadsViewModel.checkAndAutoInstallPendingReplace(context, latestApps)
+                }
             }
         }
         val filter = IntentFilter().apply {
@@ -252,9 +263,10 @@ fun MainAppContent(
         }
     }
 
-    // Immediate refresh when user returns to HsStore from installer or uninstaller
+    // Immediate refresh + auto-install pending replace when returning from installer or uninstaller
     LifecycleResumeEffect(apps) {
         InstalledAppDetector.refreshAllKnownPackages(context, apps.map { it.packageName })
+        downloadsViewModel.checkAndAutoInstallPendingReplace(context, apps)
         onPauseOrDispose {}
     }
 
@@ -430,6 +442,7 @@ fun MainAppContent(
                         MainTab.APPS -> AppsScreen(
                             apps = apps,
                             bookmarkedIds = bookmarkedAppIds,
+                            downloadTasks = downloadTasks,
                             isRefreshing = isCatalogLoading,
                             currentLanguage = currentLanguage,
                             isOnline = isOnline,
@@ -445,6 +458,18 @@ fun MainAppContent(
                                 downloadsViewModel.startDownload(app, currentUser)
                                 Toast.makeText(context, "Added ${app.name} to downloads", Toast.LENGTH_SHORT).show()
                             },
+                            onInstallDownloadedApp = { task ->
+                                val res = downloadsViewModel.installApk(context, task)
+                                if (res.isFailure) {
+                                    Toast.makeText(context, "Installer: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                                }
+                            },
+                            onReplaceUninstallApp = { app ->
+                                downloadsViewModel.initiateReplaceUninstall(context, app)
+                            },
+                            onPauseDownload = { downloadsViewModel.pauseDownload(it) },
+                            onResumeDownload = { downloadsViewModel.resumeDownload(it) },
+                            onCancelDownload = { downloadsViewModel.cancelDownload(it) },
                             onBookmarkToggle = { app ->
                                 storeViewModel.toggleBookmark(app, currentUser) { msg ->
                                     Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
@@ -456,6 +481,7 @@ fun MainAppContent(
 
                         MainTab.DOWNLOADS -> DownloadsScreen(
                             tasks = downloadTasks,
+                            appsCatalog = apps,
                             isRefreshing = false,
                             currentLanguage = currentLanguage,
                             onRefresh = {},
@@ -467,6 +493,9 @@ fun MainAppContent(
                                 if (res.isFailure) {
                                     Toast.makeText(context, "Installer: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
                                 }
+                            },
+                            onReplaceUninstall = { task ->
+                                downloadsViewModel.initiateReplaceUninstallByTask(context, task)
                             },
                             onIsScrollingChanged = { isListScrolling = it }
                         )
@@ -637,15 +666,29 @@ fun MainAppContent(
 
             // App Detail iOS Modal Bottom Sheet
             if (selectedAppForDetail != null) {
+                val detailApp = selectedAppForDetail!!
+                val detailTask = downloadTasks.find { it.appId == detailApp.id }
                 AppDetailSheet(
-                    app = selectedAppForDetail!!,
+                    app = detailApp,
                     currentLanguage = currentLanguage,
+                    downloadTask = detailTask,
                     onDismiss = { storeViewModel.selectAppForDetail(null) },
                     onStartDownload = {
-                        val app = selectedAppForDetail!!
-                        downloadsViewModel.startDownload(app, currentUser)
-                        Toast.makeText(context, "Downloading ${app.name}...", Toast.LENGTH_SHORT).show()
-                    }
+                        downloadsViewModel.startDownload(detailApp, currentUser)
+                        Toast.makeText(context, "Downloading ${detailApp.name}...", Toast.LENGTH_SHORT).show()
+                    },
+                    onInstallDownloadedClick = { task ->
+                        val res = downloadsViewModel.installApk(context, task)
+                        if (res.isFailure) {
+                            Toast.makeText(context, "Installer: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                        }
+                    },
+                    onReplaceUninstallClick = {
+                        downloadsViewModel.initiateReplaceUninstall(context, detailApp)
+                    },
+                    onPauseDownload = { downloadsViewModel.pauseDownload(it) },
+                    onResumeDownload = { downloadsViewModel.resumeDownload(it) },
+                    onCancelDownload = { downloadsViewModel.cancelDownload(it) }
                 )
             }
 

@@ -55,10 +55,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.layout.defaultMinSize
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.iOSGetButtonText
@@ -119,6 +124,7 @@ fun CupertinoGetButton(
         ?: if (isHighlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
     val resolvedContent = if (containerColor != null || isHighlighted) Color.White else MaterialTheme.colorScheme.primary
 
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
     Surface(
         onClick = onClick,
         shape = CircleShape,
@@ -133,11 +139,11 @@ fun CupertinoGetButton(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = text.uppercase(),
+                text = if (isRtl) text else text.uppercase(),
                 style = MaterialTheme.typography.labelMedium.copy(
                     fontWeight = FontWeight.Black,
                     fontSize = 12.sp,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = if (isRtl) 0.sp else 0.5.sp
                 ),
                 maxLines = 1,
                 softWrap = false
@@ -336,49 +342,79 @@ fun CupertinoSearchField(
     placeholder: String = "Search",
     modifier: Modifier = Modifier
 ) {
-    TextField(
-        value = query,
-        onValueChange = onQueryChange,
-        placeholder = {
-            Text(
-                placeholder,
-                style = MaterialTheme.typography.bodyMedium.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
-            )
-        },
-        leadingIcon = {
+    val isRtl = LocalLayoutDirection.current == LayoutDirection.Rtl
+    val textStyle = MaterialTheme.typography.bodyMedium.copy(
+        color = MaterialTheme.colorScheme.onSurface,
+        lineHeight = 20.sp,
+        letterSpacing = if (isRtl) 0.sp else MaterialTheme.typography.bodyMedium.letterSpacing
+    )
+
+    Surface(
+        shape = CupertinoSearchShape,
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+        modifier = modifier
+            .fillMaxWidth()
+            .defaultMinSize(minHeight = 48.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Icon(
                 imageVector = Icons.Default.Search,
                 contentDescription = "Search",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.size(18.dp)
             )
-        },
-        trailingIcon = {
+            Spacer(modifier = Modifier.width(10.dp))
+            Box(
+                modifier = Modifier.weight(1f),
+                contentAlignment = Alignment.CenterStart
+            ) {
+                if (query.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            lineHeight = 20.sp,
+                            letterSpacing = if (isRtl) 0.sp else MaterialTheme.typography.bodyMedium.letterSpacing
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                BasicTextField(
+                    value = query,
+                    onValueChange = onQueryChange,
+                    singleLine = true,
+                    textStyle = textStyle,
+                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("cupertino_search_field")
+                )
+            }
             if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
+                Spacer(modifier = Modifier.width(6.dp))
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .clickable { onQueryChange("") },
+                    contentAlignment = Alignment.Center
+                ) {
                     Icon(
                         imageVector = Icons.Default.Clear,
                         contentDescription = "Clear",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(18.dp)
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
-        },
-        singleLine = true,
-        shape = CupertinoSearchShape,
-        colors = TextFieldDefaults.colors(
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
-            focusedIndicatorColor = Color.Transparent,
-            unfocusedIndicatorColor = Color.Transparent,
-            disabledIndicatorColor = Color.Transparent
-        ),
-        modifier = modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .testTag("cupertino_search_field")
-    )
+        }
+    }
 }
 
 /**

@@ -174,7 +174,7 @@ fun AboutScreen(
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp
+                        letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.8.sp
                     )
                 )
                 Text(
@@ -196,7 +196,7 @@ fun AboutScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.5.sp
                 ),
                 modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
             )
@@ -234,7 +234,7 @@ fun AboutScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.5.sp
                 ),
                 modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
             )
@@ -349,7 +349,7 @@ fun AboutScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.5.sp
                 ),
                 modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
             )
@@ -391,7 +391,7 @@ fun AboutScreen(
                         color = VerifiedBadgeGreen,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.5.sp
                     ),
                     modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
                 )
@@ -419,7 +419,7 @@ fun AboutScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.5.sp
                 ),
                 modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
             )
@@ -477,7 +477,7 @@ fun AboutScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.5.sp
                 ),
                 modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
             )

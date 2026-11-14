@@ -35,6 +35,8 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Update
 import androidx.compose.material.icons.filled.WarningAmber
@@ -44,6 +46,7 @@ import androidx.compose.material3.Divider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -77,6 +80,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import coil.compose.AsyncImage
+import com.example.data.model.DownloadStatus
+import com.example.data.model.DownloadTask
 import com.example.data.model.ModApp
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.LocalizedStrings
@@ -110,7 +115,13 @@ fun AppDetailSheet(
     onDismiss: () -> Unit,
     onStartDownload: () -> Unit,
     modifier: Modifier = Modifier,
-    currentLanguage: AppLanguage = AppLanguage.ENGLISH
+    currentLanguage: AppLanguage = AppLanguage.ENGLISH,
+    downloadTask: DownloadTask? = null,
+    onInstallDownloadedClick: (DownloadTask) -> Unit = {},
+    onReplaceUninstallClick: () -> Unit = {},
+    onPauseDownload: (String) -> Unit = {},
+    onResumeDownload: (String) -> Unit = {},
+    onCancelDownload: (String) -> Unit = {}
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
@@ -158,11 +169,20 @@ fun AppDetailSheet(
         )
     }
 
-    val headerActionText = when (installState) {
-        AppInstallState.NOT_INSTALLED -> LocalizedStrings.get("action_get", currentLanguage)
-        AppInstallState.INSTALLED_LATEST -> LocalizedStrings.get("action_open", currentLanguage)
-        AppInstallState.UPDATE_AVAILABLE -> LocalizedStrings.get("action_update", currentLanguage)
-        AppInstallState.SIGNATURE_MISMATCH -> LocalizedStrings.get("action_replace", currentLanguage)
+    val isDownloading = downloadTask?.status == DownloadStatus.DOWNLOADING ||
+        downloadTask?.status == DownloadStatus.QUEUED
+    val isPaused = downloadTask?.status == DownloadStatus.PAUSED
+    val isApkDownloaded = downloadTask?.status == DownloadStatus.COMPLETED &&
+        !downloadTask.filePath.isNullOrBlank()
+
+    val headerActionText = when {
+        isDownloading || isPaused -> "${(downloadTask!!.progress * 100).toInt()}%"
+        installState == AppInstallState.INSTALLED_LATEST -> LocalizedStrings.get("action_open", currentLanguage)
+        installState == AppInstallState.SIGNATURE_MISMATCH -> LocalizedStrings.get("action_replace", currentLanguage)
+        isApkDownloaded && (installState == AppInstallState.NOT_INSTALLED || installState == AppInstallState.UPDATE_AVAILABLE) ->
+            LocalizedStrings.get("action_install", currentLanguage)
+        installState == AppInstallState.UPDATE_AVAILABLE -> LocalizedStrings.get("action_update", currentLanguage)
+        else -> LocalizedStrings.get("action_get", currentLanguage)
     }
 
     // Lightbox State
@@ -300,28 +320,118 @@ fun AppDetailSheet(
 
                 Spacer(modifier = Modifier.width(8.dp))
 
-                // Apple Dynamic Capsule Button (GET, OPEN, UPDATE, REPLACE)
+                // Apple Dynamic Capsule Button (GET, %, INSTALL, OPEN, UPDATE, REPLACE)
                 CupertinoGetButton(
                     text = headerActionText,
                     isHighlighted = true,
-                    containerColor = if (installState == AppInstallState.SIGNATURE_MISMATCH) UninstallWarningColor else null,
+                    containerColor = when {
+                        isDownloading || isPaused -> MaterialTheme.colorScheme.primary
+                        installState == AppInstallState.SIGNATURE_MISMATCH -> UninstallWarningColor
+                        isApkDownloaded && installState != AppInstallState.INSTALLED_LATEST -> VerifiedBadgeGreen
+                        else -> null
+                    },
                     onClick = {
-                        when (installState) {
-                            AppInstallState.INSTALLED_LATEST -> {
+                        when {
+                            isDownloading && downloadTask != null -> {
+                                onPauseDownload(downloadTask.id)
+                            }
+                            isPaused && downloadTask != null -> {
+                                onResumeDownload(downloadTask.id)
+                            }
+                            installState == AppInstallState.INSTALLED_LATEST -> {
                                 val launched = InstalledAppDetector.launchInstalledApp(context, app.packageName)
-                                if (!launched) onStartDownload()
+                                if (!launched) {
+                                    if (isApkDownloaded && downloadTask != null) {
+                                        onInstallDownloadedClick(downloadTask)
+                                    } else {
+                                        onStartDownload()
+                                    }
+                                }
                                 onDismiss()
                             }
-                            AppInstallState.SIGNATURE_MISMATCH -> {
-                                InstalledAppDetector.uninstallPackage(context, app.packageName)
+                            installState == AppInstallState.SIGNATURE_MISMATCH -> {
+                                if (isApkDownloaded) {
+                                    onReplaceUninstallClick()
+                                } else {
+                                    onStartDownload()
+                                }
                             }
-                            AppInstallState.NOT_INSTALLED, AppInstallState.UPDATE_AVAILABLE -> {
+                            isApkDownloaded && downloadTask != null -> {
+                                onInstallDownloadedClick(downloadTask)
+                            }
+                            else -> {
                                 onStartDownload()
-                                onDismiss()
                             }
                         }
                     }
                 )
+            }
+
+            // Live Download Progress Bar with Pause / Resume / Cancel controls
+            AnimatedVisibility(visible = (isDownloading || isPaused) && downloadTask != null) {
+                if (downloadTask != null) {
+                    Column {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    Text(
+                                        text = "${LocalizedStrings.get("downloads_active_section", currentLanguage)}: ${(downloadTask.progress * 100).toInt()}%",
+                                        style = MaterialTheme.typography.labelLarge.copy(
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        IconButton(
+                                            onClick = {
+                                                if (isDownloading) onPauseDownload(downloadTask.id)
+                                                else onResumeDownload(downloadTask.id)
+                                            },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = if (isDownloading) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                                contentDescription = LocalizedStrings.get(if (isDownloading) "action_pause" else "action_resume", currentLanguage),
+                                                tint = MaterialTheme.colorScheme.primary,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                        IconButton(
+                                            onClick = { onCancelDownload(downloadTask.id) },
+                                            modifier = Modifier.size(32.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = LocalizedStrings.get("action_cancel", currentLanguage),
+                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                LinearProgressIndicator(
+                                    progress = { downloadTask.progress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(5.dp)
+                                        .clip(CircleShape),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surface
+                                )
+                            }
+                        }
+                    }
+                }
             }
 
             // Smart Signature Mismatch Warning Pill (shown ONLY when an existing package has a different SHA-256 signature)
@@ -346,7 +456,11 @@ fun AppDetailSheet(
                                 )
                                 Spacer(modifier = Modifier.width(8.dp))
                                 Text(
-                                    text = LocalizedStrings.get("detail_signature_mismatch_note", currentLanguage),
+                                    text = if (isApkDownloaded) {
+                                        LocalizedStrings.get("detail_signature_mismatch_ready_note", currentLanguage)
+                                    } else {
+                                        LocalizedStrings.get("detail_signature_mismatch_note", currentLanguage)
+                                    },
                                     style = MaterialTheme.typography.bodySmall.copy(
                                         color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.SemiBold,
@@ -354,32 +468,44 @@ fun AppDetailSheet(
                                     )
                                 )
                             }
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Button(
-                                onClick = {
-                                    InstalledAppDetector.uninstallPackage(context, app.packageName)
-                                },
-                                shape = CircleShape,
-                                colors = ButtonDefaults.buttonColors(
-                                    containerColor = UninstallWarningColor,
-                                    contentColor = Color.White
-                                ),
-                                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(40.dp)
-                                    .testTag("uninstall_existing_btn")
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DeleteOutline,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = LocalizedStrings.get("detail_uninstall_existing_btn", currentLanguage),
-                                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
-                                )
+                            if (!isDownloading && !isPaused) {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                val warningBtnText = if (isApkDownloaded) {
+                                    LocalizedStrings.get("detail_uninstall_existing_btn", currentLanguage)
+                                } else {
+                                    val tpl = LocalizedStrings.get("detail_download_first_replace_btn", currentLanguage)
+                                    try { String.format(tpl, app.sizeDisplay) } catch (_: Exception) { "Download Mod First (${app.sizeDisplay})" }
+                                }
+                                Button(
+                                    onClick = {
+                                        if (isApkDownloaded) {
+                                            onReplaceUninstallClick()
+                                        } else {
+                                            onStartDownload()
+                                        }
+                                    },
+                                    shape = CircleShape,
+                                    colors = ButtonDefaults.buttonColors(
+                                        containerColor = UninstallWarningColor,
+                                        contentColor = Color.White
+                                    ),
+                                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(40.dp)
+                                        .testTag("uninstall_existing_btn")
+                                ) {
+                                    Icon(
+                                        imageVector = if (isApkDownloaded) Icons.Default.DeleteOutline else Icons.Default.Download,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = warningBtnText,
+                                        style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                                    )
+                                }
                             }
                         }
                     }
@@ -495,7 +621,7 @@ fun AppDetailSheet(
                 style = MaterialTheme.typography.labelSmall.copy(
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    letterSpacing = 0.6.sp
+                    letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.6.sp
                 )
             )
             Spacer(modifier = Modifier.height(8.dp))
@@ -621,44 +747,75 @@ fun AppDetailSheet(
             ) {
                 Column {
                     Spacer(modifier = Modifier.height(24.dp))
-                    val primaryBtnText = remember(installState, app.sizeDisplay, currentLanguage) {
-                        when (installState) {
-                            AppInstallState.INSTALLED_LATEST -> LocalizedStrings.get("detail_action_open", currentLanguage)
-                            AppInstallState.UPDATE_AVAILABLE -> {
+                    val primaryBtnText = remember(installState, isDownloading, isPaused, isApkDownloaded, downloadTask?.progress, app.sizeDisplay, currentLanguage) {
+                        when {
+                            isDownloading || isPaused -> {
+                                val pct = ((downloadTask?.progress ?: 0f) * 100).toInt()
+                                "${LocalizedStrings.get("downloads_active_section", currentLanguage)} ($pct%)"
+                            }
+                            installState == AppInstallState.INSTALLED_LATEST -> LocalizedStrings.get("detail_action_open", currentLanguage)
+                            installState == AppInstallState.SIGNATURE_MISMATCH -> {
+                                if (isApkDownloaded) {
+                                    LocalizedStrings.get("detail_action_replace", currentLanguage)
+                                } else {
+                                    val tpl = LocalizedStrings.get("detail_action_download_replace", currentLanguage)
+                                    try { String.format(tpl, app.sizeDisplay) } catch (_: Exception) { "Download & Replace (${app.sizeDisplay})" }
+                                }
+                            }
+                            isApkDownloaded -> LocalizedStrings.get("detail_action_install", currentLanguage)
+                            installState == AppInstallState.UPDATE_AVAILABLE -> {
                                 val tpl = LocalizedStrings.get("detail_action_update", currentLanguage)
                                 try { String.format(tpl, app.sizeDisplay) } catch (_: Exception) { "Update (${app.sizeDisplay})" }
                             }
-                            AppInstallState.NOT_INSTALLED -> {
+                            else -> {
                                 val tpl = LocalizedStrings.get("detail_action_download", currentLanguage)
                                 try { String.format(tpl, app.sizeDisplay) } catch (_: Exception) { "Download (${app.sizeDisplay})" }
                             }
-                            AppInstallState.SIGNATURE_MISMATCH -> LocalizedStrings.get("detail_action_replace", currentLanguage)
                         }
                     }
                     Button(
                         onClick = {
-                            when (installState) {
-                                AppInstallState.INSTALLED_LATEST -> {
+                            when {
+                                isDownloading && downloadTask != null -> {
+                                    onPauseDownload(downloadTask.id)
+                                }
+                                isPaused && downloadTask != null -> {
+                                    onResumeDownload(downloadTask.id)
+                                }
+                                installState == AppInstallState.INSTALLED_LATEST -> {
                                     val launched = InstalledAppDetector.launchInstalledApp(context, app.packageName)
-                                    if (!launched) onStartDownload()
+                                    if (!launched) {
+                                        if (isApkDownloaded && downloadTask != null) {
+                                            onInstallDownloadedClick(downloadTask)
+                                        } else {
+                                            onStartDownload()
+                                        }
+                                    }
                                     onDismiss()
                                 }
-                                AppInstallState.SIGNATURE_MISMATCH -> {
-                                    InstalledAppDetector.uninstallPackage(context, app.packageName)
+                                installState == AppInstallState.SIGNATURE_MISMATCH -> {
+                                    if (isApkDownloaded) {
+                                        onReplaceUninstallClick()
+                                    } else {
+                                        onStartDownload()
+                                    }
                                 }
-                                AppInstallState.UPDATE_AVAILABLE, AppInstallState.NOT_INSTALLED -> {
+                                isApkDownloaded && downloadTask != null -> {
+                                    onInstallDownloadedClick(downloadTask)
+                                }
+                                else -> {
                                     onStartDownload()
-                                    onDismiss()
                                 }
                             }
                         },
                         shape = CircleShape,
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = when (installState) {
-                                AppInstallState.INSTALLED_LATEST -> VerifiedBadgeGreen
-                                AppInstallState.UPDATE_AVAILABLE -> MaterialTheme.colorScheme.primary
-                                AppInstallState.SIGNATURE_MISMATCH -> UninstallWarningColor
-                                AppInstallState.NOT_INSTALLED -> MaterialTheme.colorScheme.primary
+                            containerColor = when {
+                                isDownloading || isPaused -> MaterialTheme.colorScheme.primary
+                                installState == AppInstallState.INSTALLED_LATEST -> VerifiedBadgeGreen
+                                installState == AppInstallState.SIGNATURE_MISMATCH -> UninstallWarningColor
+                                isApkDownloaded -> VerifiedBadgeGreen
+                                else -> MaterialTheme.colorScheme.primary
                             },
                             contentColor = Color.White
                         ),
@@ -668,11 +825,14 @@ fun AppDetailSheet(
                             .testTag("detail_download_action")
                     ) {
                         Icon(
-                            imageVector = when (installState) {
-                                AppInstallState.INSTALLED_LATEST -> Icons.Default.OpenInNew
-                                AppInstallState.UPDATE_AVAILABLE -> Icons.Default.Update
-                                AppInstallState.SIGNATURE_MISMATCH -> Icons.Default.DeleteOutline
-                                AppInstallState.NOT_INSTALLED -> Icons.Default.Download
+                            imageVector = when {
+                                isDownloading -> Icons.Default.Pause
+                                isPaused -> Icons.Default.PlayArrow
+                                installState == AppInstallState.INSTALLED_LATEST -> Icons.Default.OpenInNew
+                                installState == AppInstallState.SIGNATURE_MISMATCH ->
+                                    if (isApkDownloaded) Icons.Default.DeleteOutline else Icons.Default.Download
+                                installState == AppInstallState.UPDATE_AVAILABLE && !isApkDownloaded -> Icons.Default.Update
+                                else -> Icons.Default.Download
                             },
                             contentDescription = null,
                             modifier = Modifier.size(18.dp)

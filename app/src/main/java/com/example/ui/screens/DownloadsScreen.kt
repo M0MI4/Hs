@@ -45,12 +45,17 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import com.example.data.model.DownloadStatus
 import com.example.data.model.DownloadTask
+import com.example.data.model.ModApp
 import com.example.ui.components.CupertinoGetButton
 import com.example.ui.components.CupertinoPullToRefreshBox
 import com.example.ui.components.CupertinoGroupedCard
 import com.example.ui.theme.VerifiedBadgeGreen
+import com.example.util.AppInstallState
+import com.example.util.InstalledAppDetector
 
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.LocalizedStrings
@@ -62,6 +67,7 @@ private val TaskIconShape = RoundedCornerShape(11.dp)
 @Composable
 fun DownloadsScreen(
     tasks: List<DownloadTask>,
+    appsCatalog: List<ModApp> = emptyList(),
     isRefreshing: Boolean = false,
     currentLanguage: AppLanguage = AppLanguage.ENGLISH,
     onRefresh: () -> Unit = {},
@@ -69,6 +75,7 @@ fun DownloadsScreen(
     onResume: (String) -> Unit,
     onCancel: (String) -> Unit,
     onInstall: (DownloadTask) -> Unit,
+    onReplaceUninstall: (DownloadTask) -> Unit = {},
     onIsScrollingChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
@@ -108,7 +115,7 @@ fun DownloadsScreen(
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Bold,
-                        letterSpacing = 0.8.sp
+                        letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.8.sp
                     )
                 )
                 Text(
@@ -131,7 +138,7 @@ fun DownloadsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Bold,
                         fontSize = 12.sp,
-                        letterSpacing = 0.5.sp
+                        letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.5.sp
                     ),
                     modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
                 )
@@ -160,7 +167,7 @@ fun DownloadsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     fontWeight = FontWeight.Bold,
                     fontSize = 12.sp,
-                    letterSpacing = 0.5.sp
+                    letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.5.sp
                 ),
                 modifier = Modifier.padding(start = 8.dp, bottom = 6.dp)
             )
@@ -193,9 +200,15 @@ fun DownloadsScreen(
             } else {
                 CupertinoGroupedCard {
                     completedTasks.forEachIndexed { index, task ->
+                        val matchingApp = appsCatalog.find {
+                            it.id == task.appId || (task.packageName.isNotBlank() && it.packageName == task.packageName)
+                        }
                         CompletedDownloadRow(
                             task = task,
+                            matchingApp = matchingApp,
+                            currentLanguage = currentLanguage,
                             onInstall = { onInstall(task) },
+                            onReplaceUninstall = { onReplaceUninstall(task) },
                             onDelete = { onCancel(task.id) },
                             showDivider = index < completedTasks.size - 1
                         )
@@ -306,11 +319,35 @@ private fun ActiveDownloadRow(
 @Composable
 private fun CompletedDownloadRow(
     task: DownloadTask,
+    matchingApp: ModApp?,
+    currentLanguage: AppLanguage,
     onInstall: () -> Unit,
+    onReplaceUninstall: () -> Unit,
     onDelete: () -> Unit,
     showDivider: Boolean
 ) {
     val context = LocalContext.current
+    val packageStateVersion by InstalledAppDetector.packageStateVersion.collectAsState()
+    val installState = remember(
+        task.packageName,
+        matchingApp?.versionCode,
+        matchingApp?.expectedSignatureSha256,
+        packageStateVersion
+    ) {
+        InstalledAppDetector.detectAppState(
+            context = context,
+            packageName = task.packageName,
+            storeVersionCode = matchingApp?.versionCode ?: 0,
+            expectedSignatureSha256 = matchingApp?.expectedSignatureSha256 ?: ""
+        )
+    }
+
+    val buttonLabel = when (installState) {
+        AppInstallState.SIGNATURE_MISMATCH -> LocalizedStrings.get("action_replace", currentLanguage)
+        AppInstallState.INSTALLED_LATEST -> LocalizedStrings.get("action_open", currentLanguage)
+        else -> LocalizedStrings.get("action_install", currentLanguage)
+    }
+
     val iconRequest = remember(task.iconUrl) {
         coil.request.ImageRequest.Builder(context)
             .data(task.iconUrl)
@@ -361,9 +398,20 @@ private fun CompletedDownloadRow(
         }
 
         CupertinoGetButton(
-            text = "INSTALL",
+            text = buttonLabel,
             isHighlighted = true,
-            onClick = onInstall
+            containerColor = if (installState == AppInstallState.SIGNATURE_MISMATCH) Color(0xFFFF9500) else null,
+            onClick = {
+                when (installState) {
+                    AppInstallState.SIGNATURE_MISMATCH -> onReplaceUninstall()
+                    AppInstallState.INSTALLED_LATEST -> {
+                        if (!InstalledAppDetector.launchInstalledApp(context, task.packageName)) {
+                            onInstall()
+                        }
+                    }
+                    else -> onInstall()
+                }
+            }
         )
 
         Spacer(modifier = Modifier.width(4.dp))

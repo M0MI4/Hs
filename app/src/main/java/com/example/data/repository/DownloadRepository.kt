@@ -93,7 +93,7 @@ class DownloadRepository(private val context: Context) {
             downloadUrl = app.downloadUrl
         )
 
-        _tasks.value = listOf(newTask) + _tasks.value.filter { it.id != taskId }
+        _tasks.value = listOf(newTask) + _tasks.value.filter { it.appId != app.id && it.id != taskId }
         launchRealStreamingDownload(newTask)
         return taskId
     }

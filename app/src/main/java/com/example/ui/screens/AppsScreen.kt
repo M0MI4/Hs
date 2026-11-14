@@ -46,6 +46,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.DownloadTask
 import com.example.data.model.ModApp
 import com.example.ui.components.CupertinoPullToRefreshBox
 import com.example.ui.components.CupertinoSearchField
@@ -65,6 +66,7 @@ private val ReorderHandleShape = RoundedCornerShape(8.dp)
 fun AppsScreen(
     apps: List<ModApp>,
     bookmarkedIds: Set<String>,
+    downloadTasks: List<DownloadTask> = emptyList(),
     isRefreshing: Boolean = false,
     currentLanguage: AppLanguage = AppLanguage.ENGLISH,
     isOnline: Boolean = true,
@@ -72,6 +74,11 @@ fun AppsScreen(
     onRefresh: () -> Unit = {},
     onAppSelected: (ModApp) -> Unit,
     onDownloadApp: (ModApp) -> Unit,
+    onInstallDownloadedApp: (DownloadTask) -> Unit = {},
+    onReplaceUninstallApp: (ModApp) -> Unit = {},
+    onPauseDownload: (String) -> Unit = {},
+    onResumeDownload: (String) -> Unit = {},
+    onCancelDownload: (String) -> Unit = {},
     onBookmarkToggle: (ModApp) -> Unit,
     onReorderApps: (Int, Int) -> Unit = { _, _ -> },
     onIsScrollingChanged: (Boolean) -> Unit = {},
@@ -128,9 +135,14 @@ fun AppsScreen(
         try { String.format(prefix, cat) } catch (e: Exception) { "Search in $cat..." }
     }
 
-    val categoryHeader = remember(localizedCategories, selectedCategoryIndex, filteredApps.size) {
-        val cat = localizedCategories.getOrElse(selectedCategoryIndex) { "All" }.uppercase()
-        "$cat (${filteredApps.size})"
+    val taskByAppId = remember(downloadTasks) {
+        downloadTasks.associateBy { it.appId }
+    }
+
+    val categoryHeader = remember(localizedCategories, selectedCategoryIndex, filteredApps.size, currentLanguage) {
+        val cat = localizedCategories.getOrElse(selectedCategoryIndex) { "All" }
+        val label = if (currentLanguage.isRtl) cat else cat.uppercase()
+        "$label (${filteredApps.size})"
     }
 
     CupertinoPullToRefreshBox(
@@ -155,7 +167,7 @@ fun AppsScreen(
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.8.sp
+                            letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.8.sp
                         )
                     )
                     Row(
@@ -214,7 +226,7 @@ fun AppsScreen(
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontWeight = FontWeight.Bold,
-                            letterSpacing = 0.5.sp,
+                            letterSpacing = if (currentLanguage.isRtl) 0.sp else 0.5.sp,
                             fontSize = 12.sp
                         )
                     )
@@ -303,7 +315,13 @@ fun AppsScreen(
                                     onAppClick = { onAppSelected(app) },
                                     onDownloadClick = { onDownloadApp(app) },
                                     onBookmarkToggle = { onBookmarkToggle(app) },
-                                    currentLanguage = currentLanguage
+                                    currentLanguage = currentLanguage,
+                                    downloadTask = taskByAppId[app.id],
+                                    onInstallDownloadedClick = onInstallDownloadedApp,
+                                    onReplaceUninstallClick = { onReplaceUninstallApp(app) },
+                                    onPauseDownloadClick = onPauseDownload,
+                                    onResumeDownloadClick = onResumeDownload,
+                                    onCancelDownloadClick = onCancelDownload
                                 )
                             }
 
