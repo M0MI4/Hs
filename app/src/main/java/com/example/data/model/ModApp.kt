@@ -33,7 +33,8 @@ data class ModApp(
     val screenshots: List<String> = emptyList(),
     val downloadCount: Long = 0L,
     val requiresUninstallOfficial: Boolean = false,
-    val glowColorHex: String = ""
+    val glowColorHex: String = "",
+    val expectedSignatureSha256: String = ""
 )
 
 @Immutable

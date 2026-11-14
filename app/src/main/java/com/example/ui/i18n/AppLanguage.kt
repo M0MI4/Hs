@@ -31,6 +31,7 @@ object LocalizedStrings {
         "action_get" to "GET",
         "action_install" to "INSTALL",
         "action_open" to "OPEN",
+        "action_replace" to "REPLACE",
         "action_read_story" to "READ STORY",
         "action_read_more" to "READ MORE →",
         "action_close" to "Close",
@@ -95,6 +96,9 @@ object LocalizedStrings {
         "detail_action_open" to "Open Installed App",
         "detail_action_update" to "Update APK (%s)",
         "detail_action_download" to "Download APK (%s)",
+        "detail_action_replace" to "Uninstall Existing App",
+        "detail_signature_mismatch_note" to "Different signature detected (Play Store or another mod). Please uninstall the existing app first before installing this mod.",
+        "detail_uninstall_existing_btn" to "Uninstall Existing App",
         "detail_lightbox_counter" to "%d of %d",
         "detail_lightbox_hint" to "Pinch to zoom • Double tap to reset",
 
@@ -142,9 +146,10 @@ object LocalizedStrings {
         "tab_settings" to "ڕێکخستن",
 
         // Actions
-        "action_get" to "داگرتن",
+        "action_get" to "دابەزاندن",
         "action_install" to "دامەزراندن",
         "action_open" to "کردنەوە",
+        "action_replace" to "گۆڕین",
         "action_read_story" to "خوێندنەوەی هەواڵ",
         "action_read_more" to "زیاتر بخوێنەوە ←",
         "action_close" to "داخستن",
@@ -209,6 +214,9 @@ object LocalizedStrings {
         "detail_action_open" to "کردنەوەی بەرنامە",
         "detail_action_update" to "نوێکردنەوەی APK (%s)",
         "detail_action_download" to "داگرتنی APK (%s)",
+        "detail_action_replace" to "سڕینەوەی ئەپی کۆن",
+        "detail_signature_mismatch_note" to "تێبینی: ئەم ئەپە بە واژۆیەکی تر (وەک Play Store یان مۆدێکی تر) دامەزراوە؛ پێش دامەزراندنی ئەم مۆدە دەبێت ئەپە کۆنەکە بسڕیتەوە.",
+        "detail_uninstall_existing_btn" to "سڕینەوەی ئەپی کۆن",
         "detail_lightbox_counter" to "%d لە %d",
         "detail_lightbox_hint" to "بە دوو پەنجە گەورەی بکە • دوو جار لێبدە بۆ گەڕاندنەوە",
 

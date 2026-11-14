@@ -29,10 +29,11 @@ class ExampleRobolectricTest {
   }
 
   @Test
-  fun `install state returns GET for uninstalled package`() {
+  fun `install state returns NOT_INSTALLED for uninstalled package`() {
     val context = ApplicationProvider.getApplicationContext<Context>()
+    com.example.util.InstalledAppDetector.invalidateCache()
     val state = com.example.util.InstallStatusHelper.getAppInstallState(context, "com.nonexistent.package.app", 1)
-    assertEquals(com.example.util.AppInstallState.GET, state)
+    assertEquals(com.example.util.AppInstallState.NOT_INSTALLED, state)
   }
 
   @Test
@@ -91,5 +92,116 @@ class ExampleRobolectricTest {
     assertEquals(0L, app.downloadCount)
     assertEquals(false, app.requiresUninstallOfficial)
     assertEquals("", app.glowColorHex)
+    assertEquals("", app.expectedSignatureSha256)
+  }
+
+  @Test
+  fun `installed app detector evaluates all 4 smart install states accurately`() {
+    val trusted = com.example.util.InstalledAppDetector.DEFAULT_TRUSTED_MOD_SIGNATURE_SHA256
+    val otherSig = "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+
+    assertEquals(
+      com.example.util.AppInstallState.NOT_INSTALLED,
+      com.example.util.InstalledAppDetector.evaluateState(
+        info = com.example.util.InstalledAppInfo(isInstalled = false),
+        storeVersionCode = 10
+      )
+    )
+
+    assertEquals(
+      com.example.util.AppInstallState.INSTALLED_LATEST,
+      com.example.util.InstalledAppDetector.evaluateState(
+        info = com.example.util.InstalledAppInfo(
+          isInstalled = true,
+          versionCode = 10L,
+          signaturesSha256 = listOf(trusted)
+        ),
+        storeVersionCode = 10
+      )
+    )
+
+    assertEquals(
+      com.example.util.AppInstallState.UPDATE_AVAILABLE,
+      com.example.util.InstalledAppDetector.evaluateState(
+        info = com.example.util.InstalledAppInfo(
+          isInstalled = true,
+          versionCode = 8L,
+          signaturesSha256 = listOf(trusted)
+        ),
+        storeVersionCode = 10
+      )
+    )
+
+    assertEquals(
+      com.example.util.AppInstallState.SIGNATURE_MISMATCH,
+      com.example.util.InstalledAppDetector.evaluateState(
+        info = com.example.util.InstalledAppInfo(
+          isInstalled = true,
+          versionCode = 12L,
+          signaturesSha256 = listOf(otherSig)
+        ),
+        storeVersionCode = 10
+      )
+    )
+
+    // Custom expected signature per ModApp overrides default trusted signature
+    assertEquals(
+      com.example.util.AppInstallState.INSTALLED_LATEST,
+      com.example.util.InstalledAppDetector.evaluateState(
+        info = com.example.util.InstalledAppInfo(
+          isInstalled = true,
+          versionCode = 10L,
+          signaturesSha256 = listOf(otherSig)
+        ),
+        storeVersionCode = 10,
+        expectedSignatureSha256 = otherSig
+      )
+    )
+  }
+
+  @Test
+  fun `installed app detector inspects real PackageManager certificates without colons`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val shadowPm = org.robolectric.Shadows.shadowOf(context.packageManager)
+    val sigBytes = "test-mod-certificate".toByteArray()
+    val expectedHex = com.example.util.InstalledAppDetector.computeSha256Hex(sigBytes)!!
+    assertEquals(false, expectedHex.contains(":"))
+    assertEquals(expectedHex.uppercase(), expectedHex)
+
+    val sig = android.content.pm.Signature(sigBytes)
+    val signingInfoObj = android.content.pm.SigningInfo::class.java
+      .getConstructor(
+        Int::class.javaPrimitiveType,
+        Collection::class.java,
+        Collection::class.java,
+        Collection::class.java
+      )
+      .newInstance(3, listOf(sig), emptyList<android.content.pm.Signature>(), emptyList<Int>())
+
+    val pkgInfo = android.content.pm.PackageInfo().apply {
+      packageName = "com.example.testmod"
+      longVersionCode = 5L
+      signingInfo = signingInfoObj
+      @Suppress("DEPRECATION")
+      signatures = arrayOf(sig)
+    }
+    shadowPm.installPackage(pkgInfo)
+    com.example.util.InstalledAppDetector.invalidateCache("com.example.testmod")
+
+    val updateState = com.example.util.InstalledAppDetector.detectAppState(
+      context = context,
+      packageName = "com.example.testmod",
+      storeVersionCode = 6,
+      expectedSignatureSha256 = expectedHex
+    )
+    assertEquals(com.example.util.AppInstallState.UPDATE_AVAILABLE, updateState)
+
+    val mismatchState = com.example.util.InstalledAppDetector.detectAppState(
+      context = context,
+      packageName = "com.example.testmod",
+      storeVersionCode = 5,
+      expectedSignatureSha256 = ""
+    )
+    assertEquals(com.example.util.AppInstallState.SIGNATURE_MISMATCH, mismatchState)
   }
 }

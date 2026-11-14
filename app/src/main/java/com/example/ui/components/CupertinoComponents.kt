@@ -112,13 +112,18 @@ fun CupertinoGetButton(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
     isHighlighted: Boolean = false,
-    horizontalPadding: Dp = 16.dp
+    horizontalPadding: Dp = 16.dp,
+    containerColor: Color? = null
 ) {
+    val resolvedBg = containerColor
+        ?: if (isHighlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant
+    val resolvedContent = if (containerColor != null || isHighlighted) Color.White else MaterialTheme.colorScheme.primary
+
     Surface(
         onClick = onClick,
         shape = CircleShape,
-        color = if (isHighlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-        contentColor = if (isHighlighted) Color.White else MaterialTheme.colorScheme.primary,
+        color = resolvedBg,
+        contentColor = resolvedContent,
         modifier = modifier
             .height(30.dp)
             .testTag("cupertino_get_btn")

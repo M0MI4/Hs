@@ -25,6 +25,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,7 +46,7 @@ import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.LocalizedStrings
 import com.example.ui.theme.VerifiedBadgeGreen
 import com.example.util.AppInstallState
-import com.example.util.InstallStatusHelper
+import com.example.util.InstalledAppDetector
 
 // Top-level static shapes to eliminate per-frame allocations during scrolling
 private val ModCardShape = RoundedCornerShape(16.dp)
@@ -61,8 +63,19 @@ fun ModAppCard(
     currentLanguage: AppLanguage = AppLanguage.ENGLISH
 ) {
     val context = LocalContext.current
-    val installState = remember(app.packageName, app.versionCode) {
-        InstallStatusHelper.getAppInstallState(context, app.packageName, app.versionCode)
+    val packageStateVersion by InstalledAppDetector.packageStateVersion.collectAsState()
+    val installState = remember(
+        app.packageName,
+        app.versionCode,
+        app.expectedSignatureSha256,
+        packageStateVersion
+    ) {
+        InstalledAppDetector.detectAppState(
+            context = context,
+            packageName = app.packageName,
+            storeVersionCode = app.versionCode,
+            expectedSignatureSha256 = app.expectedSignatureSha256
+        )
     }
 
     val bylineText = remember(app.author, app.category) {
@@ -75,9 +88,10 @@ fun ModAppCard(
     }
 
     val actionButtonText = when (installState) {
-        AppInstallState.GET -> LocalizedStrings.get("action_get", currentLanguage)
-        AppInstallState.UPDATE -> LocalizedStrings.get("action_update", currentLanguage)
-        AppInstallState.OPEN -> LocalizedStrings.get("action_open", currentLanguage)
+        AppInstallState.NOT_INSTALLED -> LocalizedStrings.get("action_get", currentLanguage)
+        AppInstallState.INSTALLED_LATEST -> LocalizedStrings.get("action_open", currentLanguage)
+        AppInstallState.UPDATE_AVAILABLE -> LocalizedStrings.get("action_update", currentLanguage)
+        AppInstallState.SIGNATURE_MISMATCH -> LocalizedStrings.get("action_replace", currentLanguage)
     }
 
     val modFeaturesText = remember(app.modFeatures) {
@@ -205,16 +219,23 @@ fun ModAppCard(
 
                 Spacer(modifier = Modifier.width(6.dp))
 
-                // Dynamic Action Capsule Button (GET, UPDATE, OPEN)
+                // Dynamic Action Capsule Button (GET, OPEN, UPDATE, REPLACE)
                 CupertinoGetButton(
                     text = actionButtonText,
                     horizontalPadding = 12.dp,
+                    containerColor = if (installState == AppInstallState.SIGNATURE_MISMATCH) Color(0xFFFF9500) else null,
                     onClick = {
-                        if (installState == AppInstallState.OPEN) {
-                            val launched = InstallStatusHelper.launchInstalledApp(context, app.packageName)
-                            if (!launched) onDownloadClick()
-                        } else {
-                            onDownloadClick()
+                        when (installState) {
+                            AppInstallState.INSTALLED_LATEST -> {
+                                val launched = InstalledAppDetector.launchInstalledApp(context, app.packageName)
+                                if (!launched) onDownloadClick()
+                            }
+                            AppInstallState.SIGNATURE_MISMATCH -> {
+                                InstalledAppDetector.uninstallPackage(context, app.packageName)
+                            }
+                            AppInstallState.NOT_INSTALLED, AppInstallState.UPDATE_AVAILABLE -> {
+                                onDownloadClick()
+                            }
                         }
                     }
                 )

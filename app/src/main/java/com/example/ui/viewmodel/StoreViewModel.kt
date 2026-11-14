@@ -71,8 +71,17 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
-        // Preload installed applications into memory cache to eliminate scroll lag
-        com.example.util.InstallStatusHelper.preloadInstalledPackages(application.applicationContext)
+        // Preload installed applications and signing certificates into memory cache to eliminate scroll lag
+        viewModelScope.launch {
+            catalogRepo.apps.collect { list ->
+                if (list.isNotEmpty()) {
+                    com.example.util.InstalledAppDetector.preloadPackages(
+                        application.applicationContext,
+                        list.map { it.packageName }
+                    )
+                }
+            }
+        }
         // Startup auto sync for catalog, news, and updates
         refreshAll()
     }

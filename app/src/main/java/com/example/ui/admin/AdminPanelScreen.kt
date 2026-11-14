@@ -708,6 +708,7 @@ private fun AppEditorBottomSheet(
     var isVerified by remember { mutableStateOf(app?.isVerified ?: true) }
     var requiresUninstallOfficial by remember(app) { mutableStateOf(app?.requiresUninstallOfficial ?: false) }
     var glowColorHex by remember(app) { mutableStateOf(app?.glowColorHex ?: "") }
+    var expectedSignatureSha256 by remember(app) { mutableStateOf(app?.expectedSignatureSha256 ?: "") }
     var isParsingApk by remember { mutableStateOf(false) }
     var screenshotsList by remember(app) { mutableStateOf(app?.screenshots ?: emptyList()) }
     var screenshotInputUrl by remember { mutableStateOf("") }
@@ -1181,6 +1182,16 @@ private fun AppEditorBottomSheet(
                         )
                     }
                 }
+                item {
+                    OutlinedTextField(
+                        value = expectedSignatureSha256,
+                        onValueChange = { expectedSignatureSha256 = it },
+                        label = { Text("Expected Mod Signing SHA-256 (optional)") },
+                        placeholder = { Text(com.example.util.InstalledAppDetector.DEFAULT_TRUSTED_MOD_SIGNATURE_SHA256.take(16) + "...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -1210,6 +1221,7 @@ private fun AppEditorBottomSheet(
                         isVerified = isVerified,
                         requiresUninstallOfficial = requiresUninstallOfficial,
                         glowColorHex = glowColorHex.trim(),
+                        expectedSignatureSha256 = expectedSignatureSha256.trim(),
                         downloadCount = app?.downloadCount ?: 0L,
                         updatedDate = System.currentTimeMillis().toString()
                     )

@@ -1,11 +1,15 @@
 package com.example
 
 import android.Manifest
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.widget.Toast
+import androidx.core.content.ContextCompat
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -93,6 +97,8 @@ import com.example.ui.theme.VerifiedBadgeGreen
 import com.example.ui.viewmodel.DownloadsViewModel
 import com.example.ui.viewmodel.SettingsViewModel
 import com.example.ui.viewmodel.StoreViewModel
+import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.example.util.InstalledAppDetector
 import com.example.util.NetworkMonitor
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
@@ -222,6 +228,34 @@ fun MainAppContent(
         onDispose {
             Firebase.auth.removeAuthStateListener(listener)
         }
+    }
+
+    // Real-time BroadcastReceiver for package installs, updates, and uninstalls
+    DisposableEffect(context) {
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(ctx: Context?, intent: Intent?) {
+                val pkg = intent?.data?.schemeSpecificPart
+                InstalledAppDetector.onPackageBroadcast(context, pkg)
+            }
+        }
+        val filter = IntentFilter().apply {
+            addAction(Intent.ACTION_PACKAGE_ADDED)
+            addAction(Intent.ACTION_PACKAGE_REPLACED)
+            addAction(Intent.ACTION_PACKAGE_REMOVED)
+            addDataScheme("package")
+        }
+        ContextCompat.registerReceiver(context, receiver, filter, ContextCompat.RECEIVER_EXPORTED)
+        onDispose {
+            try {
+                context.unregisterReceiver(receiver)
+            } catch (_: Exception) {}
+        }
+    }
+
+    // Immediate refresh when user returns to HsStore from installer or uninstaller
+    LifecycleResumeEffect(apps) {
+        InstalledAppDetector.refreshAllKnownPackages(context, apps.map { it.packageName })
+        onPauseOrDispose {}
     }
 
     // Auto-prompt update dialog on start if update is available
