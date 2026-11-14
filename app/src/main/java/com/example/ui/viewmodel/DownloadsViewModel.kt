@@ -66,14 +66,45 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
         if (app.packageName.isBlank()) return false
         _pendingReplaceAppId.value = app.id
         pendingReplaceRequestedAtMs = System.currentTimeMillis()
-        return InstalledAppDetector.uninstallPackage(context, app.packageName)
+        return InstalledAppDetector.uninstallApp(context, app.packageName)
     }
 
     fun initiateReplaceUninstallByTask(context: Context, task: DownloadTask): Boolean {
         if (task.packageName.isBlank()) return false
         _pendingReplaceAppId.value = task.appId
         pendingReplaceRequestedAtMs = System.currentTimeMillis()
-        return InstalledAppDetector.uninstallPackage(context, task.packageName)
+        return InstalledAppDetector.uninstallApp(context, task.packageName)
+    }
+
+    /**
+     * Enforces SIGNATURE_MISMATCH check via live PackageManager before launching APK installer.
+     * Never calls installApk when a conflicting signature is installed.
+     */
+    fun installOrReplaceCompletedApk(
+        context: Context,
+        task: DownloadTask,
+        catalogApp: ModApp? = null
+    ): Result<Unit> {
+        val pkgName = catalogApp?.packageName?.ifBlank { null } ?: task.packageName
+        val versionCode = catalogApp?.versionCode ?: task.versionCode
+        val expectedSig = catalogApp?.expectedSignatureSha256?.ifBlank { null }
+            ?: task.expectedSignatureSha256
+
+        if (pkgName.isNotBlank()) {
+            val state = InstalledAppDetector.checkState(
+                context = context,
+                packageName = pkgName,
+                storeVersionCode = versionCode,
+                expectedSignatureSha256 = expectedSig
+            )
+            if (state == com.example.util.AppInstallState.SIGNATURE_MISMATCH) {
+                _pendingReplaceAppId.value = task.appId
+                pendingReplaceRequestedAtMs = System.currentTimeMillis()
+                InstalledAppDetector.uninstallApp(context, pkgName)
+                return Result.success(Unit)
+            }
+        }
+        return installApk(context, task)
     }
 
     fun clearPendingReplace() {
@@ -83,7 +114,8 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
 
     /**
      * Checks if an app awaiting replacement uninstall has been removed from the device.
-     * Once confirmed NOT_INSTALLED and the downloaded APK exists, launches the system APK installer immediately.
+     * Once checkState returns NOT_INSTALLED and the downloaded APK exists, clears pendingReplaceAppId
+     * and launches installApk immediately.
      */
     fun checkAndAutoInstallPendingReplace(
         context: Context,
@@ -97,12 +129,18 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
             !it.filePath.isNullOrBlank()
         } ?: return false
 
-        val pkgName = apps.find { it.id == pendingId }?.packageName?.ifBlank { null }
-            ?: completedTask.packageName
+        val catalogApp = apps.find { it.id == pendingId }
+        val pkgName = catalogApp?.packageName?.ifBlank { null } ?: completedTask.packageName
         if (pkgName.isBlank()) return false
 
-        val freshInfo = InstalledAppDetector.inspectInstalledApp(context, pkgName)
-        if (!freshInfo.isInstalled) {
+        val currentState = InstalledAppDetector.checkState(
+            context = context,
+            packageName = pkgName,
+            storeVersionCode = catalogApp?.versionCode ?: completedTask.versionCode,
+            expectedSignatureSha256 = catalogApp?.expectedSignatureSha256?.ifBlank { null }
+                ?: completedTask.expectedSignatureSha256
+        )
+        if (currentState == com.example.util.AppInstallState.NOT_INSTALLED) {
             clearPendingReplace()
             InstalledAppDetector.onPackageBroadcast(context, pkgName)
             installApk(context, completedTask)

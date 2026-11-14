@@ -38,12 +38,14 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.ErrorOutline
 import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.ImageSearch
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Logout
@@ -257,6 +259,9 @@ fun AdminPanelScreen(
             when (selectedTab) {
                 0 -> AppsManagementView(
                     apps = apps,
+                    isSeedingCatalog = adminState.isSeedingCatalog,
+                    seedProgressText = adminState.seedProgressText,
+                    onSeedCatalogDrafts = { adminViewModel.seed51CatalogDrafts() },
                     onEditApp = {
                         editingApp = it
                         showAppEditorSheet = true
@@ -373,6 +378,9 @@ fun AdminPanelScreen(
 @Composable
 private fun AppsManagementView(
     apps: List<ModApp>,
+    isSeedingCatalog: Boolean = false,
+    seedProgressText: String? = null,
+    onSeedCatalogDrafts: () -> Unit = {},
     onEditApp: (ModApp) -> Unit,
     onCreateApp: () -> Unit,
     onDeleteApp: (ModApp) -> Unit,
@@ -380,12 +388,21 @@ private fun AppsManagementView(
 ) {
     var searchQuery by remember { mutableStateOf("") }
     var isOrderEditing by remember { mutableStateOf(false) }
+    var publishFilter by remember { mutableIntStateOf(0) } // 0=All, 1=Published, 2=Drafts
 
-    val filteredApps = remember(apps, searchQuery) {
-        if (searchQuery.isBlank()) apps
+    val publishedCount = remember(apps) { apps.count { it.isPublished && it.downloadUrl.isNotBlank() } }
+    val draftsCount = remember(apps) { apps.count { !it.isPublished || it.downloadUrl.isBlank() } }
+
+    val filteredApps = remember(apps, searchQuery, publishFilter) {
+        val statusFiltered = when (publishFilter) {
+            1 -> apps.filter { it.isPublished && it.downloadUrl.isNotBlank() }
+            2 -> apps.filter { !it.isPublished || it.downloadUrl.isBlank() }
+            else -> apps
+        }
+        if (searchQuery.isBlank()) statusFiltered
         else {
             val q = searchQuery.trim().lowercase()
-            apps.filter { it.name.lowercase().contains(q) || it.packageName.lowercase().contains(q) }
+            statusFiltered.filter { it.name.lowercase().contains(q) || it.packageName.lowercase().contains(q) }
         }
     }
 
@@ -404,7 +421,7 @@ private fun AppsManagementView(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = "CATALOG PACKAGES (${apps.size})",
+                    text = "CATALOG (${apps.size}) • $draftsCount DRAFTS",
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontWeight = FontWeight.Bold,
@@ -454,6 +471,71 @@ private fun AppsManagementView(
                 }
             }
 
+            // One-Tap 51 Catalog Drafts Seeder & HD Icon Fetcher
+            OutlinedButton(
+                onClick = onSeedCatalogDrafts,
+                enabled = !isSeedingCatalog,
+                shape = RoundedCornerShape(14.dp),
+                border = BorderStroke(1.dp, Color(0xFFFF9500).copy(alpha = 0.65f)),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    containerColor = Color(0xFFFF9500).copy(alpha = 0.10f),
+                    contentColor = Color(0xFFFF9500)
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 10.dp)
+                    .testTag("seed_51_catalog_btn")
+            ) {
+                if (isSeedingCatalog) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(16.dp),
+                        color = Color(0xFFFF9500),
+                        strokeWidth = 2.dp
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = seedProgressText ?: "Seeding 51 Drafts & Fetching HD Icons...",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.CloudDownload,
+                        contentDescription = "Seed 51 Catalog Drafts",
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Seed 51 Catalog Drafts (Fetch 512px Icons)",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 13.sp
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = publishFilter == 0,
+                    onClick = { publishFilter = 0 },
+                    label = { Text("All (${apps.size})", fontSize = 12.sp) }
+                )
+                FilterChip(
+                    selected = publishFilter == 1,
+                    onClick = { publishFilter = 1 },
+                    label = { Text("Published ($publishedCount)", fontSize = 12.sp) }
+                )
+                FilterChip(
+                    selected = publishFilter == 2,
+                    onClick = { publishFilter = 2 },
+                    label = { Text("Drafts ($draftsCount)", fontSize = 12.sp) }
+                )
+            }
+
             CupertinoSearchField(
                 query = searchQuery,
                 onQueryChange = { searchQuery = it },
@@ -493,7 +575,7 @@ private fun AppsManagementView(
                     app = app,
                     index = index,
                     totalCount = filteredApps.size,
-                    isOrderEditing = isOrderEditing && searchQuery.isBlank(),
+                    isOrderEditing = isOrderEditing && publishFilter == 0 && searchQuery.isBlank(),
                     onEdit = { onEditApp(app) },
                     onDelete = { onDeleteApp(app) },
                     onMoveUp = { if (index > 0) onReorderApps(index, index - 1) },
@@ -604,14 +686,21 @@ private fun AdminAppItemCard(
                 }
             }
 
+            val context = LocalContext.current
             Surface(
                 shape = RoundedCornerShape(12.dp),
                 color = MaterialTheme.colorScheme.surfaceVariant,
                 modifier = Modifier.size(48.dp)
             ) {
                 AsyncImage(
-                    model = app.iconUrl.ifBlank { com.example.R.drawable.ic_launcher_foreground },
+                    model = ImageRequest.Builder(context)
+                        .data(app.iconUrl.ifBlank { com.example.R.drawable.ic_launcher_foreground })
+                        .size(144, 144)
+                        .allowHardware(true)
+                        .crossfade(false)
+                        .build(),
                     contentDescription = app.name,
+                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -626,7 +715,8 @@ private fun AdminAppItemCard(
                             fontWeight = FontWeight.Bold,
                             fontSize = 15.sp,
                             color = MaterialTheme.colorScheme.onSurface
-                        )
+                        ),
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                     if (app.isVerified) {
                         Spacer(modifier = Modifier.width(4.dp))
@@ -637,20 +727,40 @@ private fun AdminAppItemCard(
                             modifier = Modifier.size(14.dp)
                         )
                     }
+                    if (!app.isPublished) {
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(0xFFFF9500).copy(alpha = 0.18f),
+                            border = BorderStroke(0.5.dp, Color(0xFFFF9500))
+                        ) {
+                            Text(
+                                text = "DRAFT / ڕەشنووس",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = Color(0xFFFF9500),
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 9.sp
+                                ),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
                 }
 
+                val pkgText = app.packageName.ifBlank { "No package" }
                 Text(
-                    text = "${app.packageName} • v${app.version} (${app.sizeDisplay})",
+                    text = "$pkgText • v${app.version} (${app.sizeDisplay})",
                     style = MaterialTheme.typography.bodySmall.copy(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         fontSize = 12.sp
                     )
                 )
 
+                val urlNote = if (app.downloadUrl.isBlank()) " • Needs APK URL" else ""
                 Text(
-                    text = "Category: ${app.category} • Downloads: ${app.downloadCount}",
+                    text = "Category: ${app.category} • Downloads: ${app.downloadCount}$urlNote",
                     style = MaterialTheme.typography.labelSmall.copy(
-                        color = MaterialTheme.colorScheme.primary,
+                        color = if (app.downloadUrl.isBlank()) Color(0xFFFF9500) else MaterialTheme.colorScheme.primary,
                         fontSize = 11.sp
                     )
                 )
@@ -704,12 +814,14 @@ private fun AppEditorBottomSheet(
     var sha256 by remember { mutableStateOf(app?.sha256 ?: "") }
     var description by remember { mutableStateOf(app?.description ?: "") }
     var modFeaturesText by remember { mutableStateOf(app?.modFeatures?.joinToString("\n") ?: "") }
-    var author by remember { mutableStateOf(app?.author ?: "Hama Sade Team") }
+    var author by remember { mutableStateOf(app?.author ?: "HsStore") }
     var isVerified by remember { mutableStateOf(app?.isVerified ?: true) }
+    var isPublished by remember(app) { mutableStateOf(app?.isPublished ?: true) }
     var requiresUninstallOfficial by remember(app) { mutableStateOf(app?.requiresUninstallOfficial ?: false) }
     var glowColorHex by remember(app) { mutableStateOf(app?.glowColorHex ?: "") }
     var expectedSignatureSha256 by remember(app) { mutableStateOf(app?.expectedSignatureSha256 ?: "") }
     var isParsingApk by remember { mutableStateOf(false) }
+    var isFetchingIcon by remember { mutableStateOf(false) }
     var screenshotsList by remember(app) { mutableStateOf(app?.screenshots ?: emptyList()) }
     var screenshotInputUrl by remember { mutableStateOf("") }
 
@@ -941,12 +1053,74 @@ private fun AppEditorBottomSheet(
                 }
 
                 item {
-                    OutlinedTextField(
-                        value = iconUrl,
-                        onValueChange = { iconUrl = it },
-                        label = { Text("App Icon URL") },
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.size(52.dp)
+                        ) {
+                            AsyncImage(
+                                model = ImageRequest.Builder(context)
+                                    .data(iconUrl.ifBlank { com.example.R.drawable.ic_launcher_foreground })
+                                    .size(156, 156)
+                                    .allowHardware(true)
+                                    .crossfade(false)
+                                    .build(),
+                                contentDescription = "Icon preview",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+
+                        OutlinedTextField(
+                            value = iconUrl,
+                            onValueChange = { iconUrl = it },
+                            label = { Text("App Icon URL") },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        Button(
+                            onClick = {
+                                if (name.isBlank() && packageName.isBlank()) {
+                                    Toast.makeText(context, "Enter an app name or package first.", Toast.LENGTH_SHORT).show()
+                                    return@Button
+                                }
+                                isFetchingIcon = true
+                                scope.launch {
+                                    val fetchedUrl = adminViewModel.fetchHdIconForApp(name, packageName, glowColorHex)
+                                    iconUrl = fetchedUrl
+                                    isFetchingIcon = false
+                                    Toast.makeText(context, "512x512 HD icon fetched!", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            enabled = !isFetchingIcon,
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 14.dp),
+                            modifier = Modifier.testTag("fetch_hd_icon_btn")
+                        ) {
+                            if (isFetchingIcon) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    color = Color.White,
+                                    strokeWidth = 2.dp
+                                )
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Default.ImageSearch,
+                                    contentDescription = "Fetch HD Icon",
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Fetch HD Icon", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
 
                 // Screenshots Editor Item
@@ -1192,14 +1366,56 @@ private fun AppEditorBottomSheet(
                         modifier = Modifier.fillMaxWidth()
                     )
                 }
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = if (isPublished) VerifiedBadgeGreen.copy(alpha = 0.12f) else Color(0xFFFF9500).copy(alpha = 0.12f),
+                        border = BorderStroke(1.dp, if (isPublished) VerifiedBadgeGreen.copy(alpha = 0.45f) else Color(0xFFFF9500).copy(alpha = 0.45f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                                Text(
+                                    text = if (isPublished) "Published in Public Store" else "Draft (Hidden from Public)",
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (isPublished && downloadUrl.isBlank()) {
+                                        "Paste a Direct APK URL above so public users can see & download this app"
+                                    } else {
+                                        "Public users only see apps when Published is ON and Download URL is filled"
+                                    },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Switch(
+                                checked = isPublished,
+                                onCheckedChange = { isPublished = it },
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = VerifiedBadgeGreen
+                                ),
+                                modifier = Modifier.testTag("app_published_switch")
+                            )
+                        }
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(14.dp))
 
             Button(
                 onClick = {
-                    if (name.isBlank() || packageName.isBlank()) {
-                        Toast.makeText(context, "Please provide title and package name.", Toast.LENGTH_SHORT).show()
+                    if (name.isBlank()) {
+                        Toast.makeText(context, "Please provide an app name.", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
                     val features = modFeaturesText.lines().map { it.trim() }.filter { it.isNotBlank() }
@@ -1208,7 +1424,7 @@ private fun AppEditorBottomSheet(
                         name = name.trim(),
                         packageName = packageName.trim(),
                         category = category,
-                        version = version.trim(),
+                        version = version.trim().removePrefix("v").removePrefix("V").ifBlank { "1.0" },
                         versionCode = vCode,
                         sizeDisplay = sizeDisplay.trim(),
                         downloadUrl = downloadUrl.trim(),
@@ -1217,8 +1433,9 @@ private fun AppEditorBottomSheet(
                         sha256 = sha256.trim(),
                         description = description.trim(),
                         modFeatures = features,
-                        author = author.trim().ifBlank { "Hama Sade Team" },
+                        author = author.trim().ifBlank { "HsStore" },
                         isVerified = isVerified,
+                        isPublished = isPublished,
                         requiresUninstallOfficial = requiresUninstallOfficial,
                         glowColorHex = glowColorHex.trim(),
                         expectedSignatureSha256 = expectedSignatureSha256.trim(),
@@ -1239,11 +1456,18 @@ private fun AppEditorBottomSheet(
                 if (adminState.isLoading) {
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White, strokeWidth = 2.dp)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text("Publishing to Firestore...", fontWeight = FontWeight.Bold)
+                    Text("Saving to Firestore...", fontWeight = FontWeight.Bold)
                 } else {
                     Icon(Icons.Default.CloudUpload, contentDescription = null)
                     Spacer(modifier = Modifier.width(8.dp))
-                    Text(if (isEditMode) "Save Changes to Firestore" else "Publish App to Store", fontWeight = FontWeight.Bold)
+                    Text(
+                        text = when {
+                            !isPublished -> "Save Draft to Firestore"
+                            isEditMode -> "Save & Publish to Store"
+                            else -> "Publish App to Store"
+                        },
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
 

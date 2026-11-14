@@ -80,10 +80,15 @@ fun DownloadsScreen(
     modifier: Modifier = Modifier
 ) {
     val activeTasks = androidx.compose.runtime.remember(tasks) {
-        tasks.filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.PAUSED || it.status == DownloadStatus.QUEUED }
+        tasks.filter {
+            it.status == DownloadStatus.DOWNLOADING ||
+            it.status == DownloadStatus.PAUSED ||
+            it.status == DownloadStatus.QUEUED ||
+            it.status == DownloadStatus.FAILED
+        }
     }
     val completedTasks = androidx.compose.runtime.remember(tasks) {
-        tasks.filter { it.status == DownloadStatus.COMPLETED || it.status == DownloadStatus.FAILED }
+        tasks.filter { it.status == DownloadStatus.COMPLETED }
     }
 
     val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()
@@ -402,7 +407,14 @@ private fun CompletedDownloadRow(
             isHighlighted = true,
             containerColor = if (installState == AppInstallState.SIGNATURE_MISMATCH) Color(0xFFFF9500) else null,
             onClick = {
-                when (installState) {
+                val liveState = InstalledAppDetector.checkState(
+                    context = context,
+                    packageName = task.packageName,
+                    storeVersionCode = matchingApp?.versionCode ?: task.versionCode,
+                    expectedSignatureSha256 = matchingApp?.expectedSignatureSha256?.ifBlank { null }
+                        ?: task.expectedSignatureSha256
+                )
+                when (liveState) {
                     AppInstallState.SIGNATURE_MISMATCH -> onReplaceUninstall()
                     AppInstallState.INSTALLED_LATEST -> {
                         if (!InstalledAppDetector.launchInstalledApp(context, task.packageName)) {

@@ -30,7 +30,8 @@ data class ModAppEntity(
     val downloadCount: Long = 0L,
     val requiresUninstallOfficial: Boolean = false,
     val glowColorHex: String = "",
-    val expectedSignatureSha256: String = ""
+    val expectedSignatureSha256: String = "",
+    val isPublished: Boolean = true
 ) {
     fun toDomain(): ModApp {
         return ModApp(
@@ -58,7 +59,8 @@ data class ModAppEntity(
             downloadCount = downloadCount,
             requiresUninstallOfficial = requiresUninstallOfficial,
             glowColorHex = glowColorHex,
-            expectedSignatureSha256 = expectedSignatureSha256
+            expectedSignatureSha256 = expectedSignatureSha256,
+            isPublished = isPublished
         )
     }
 
@@ -89,7 +91,8 @@ data class ModAppEntity(
                 downloadCount = app.downloadCount,
                 requiresUninstallOfficial = app.requiresUninstallOfficial,
                 glowColorHex = app.glowColorHex,
-                expectedSignatureSha256 = app.expectedSignatureSha256
+                expectedSignatureSha256 = app.expectedSignatureSha256,
+                isPublished = app.isPublished
             )
         }
     }

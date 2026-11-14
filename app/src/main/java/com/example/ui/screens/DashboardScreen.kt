@@ -86,8 +86,12 @@ fun DashboardScreen(
         sdf.format(Date()).uppercase()
     }
 
-    val filteredApps = remember(apps, searchQuery, selectedSort) {
-        var list = apps
+    val publicApps = remember(apps) {
+        apps.filter { it.isPublished && it.downloadUrl.isNotBlank() }
+    }
+
+    val filteredApps = remember(publicApps, searchQuery, selectedSort) {
+        var list = publicApps
         if (searchQuery.isNotBlank()) {
             val q = searchQuery.trim().lowercase()
             list = list.filter {
@@ -106,8 +110,8 @@ fun DashboardScreen(
         }
     }
 
-    val featuredApp = remember(apps) {
-        apps.find { it.id == "app_retro_emu" } ?: apps.firstOrNull()
+    val featuredApp = remember(publicApps) {
+        publicApps.find { it.id == "app_retro_emu" } ?: publicApps.firstOrNull()
     }
 
     LazyColumn(
@@ -337,7 +341,7 @@ fun DashboardScreen(
         }
 
         // App rows or Shimmer Skeletons
-        if (apps.isEmpty() && isLoading) {
+        if (publicApps.isEmpty() && isLoading) {
             items(
                 count = 4,
                 key = { "dashboard_skeleton_$it" },

@@ -338,29 +338,39 @@ fun AppDetailSheet(
                             isPaused && downloadTask != null -> {
                                 onResumeDownload(downloadTask.id)
                             }
-                            installState == AppInstallState.INSTALLED_LATEST -> {
-                                val launched = InstalledAppDetector.launchInstalledApp(context, app.packageName)
-                                if (!launched) {
-                                    if (isApkDownloaded && downloadTask != null) {
+                            else -> {
+                                val liveState = InstalledAppDetector.checkState(
+                                    context = context,
+                                    packageName = app.packageName,
+                                    storeVersionCode = app.versionCode,
+                                    expectedSignatureSha256 = app.expectedSignatureSha256
+                                )
+                                when {
+                                    liveState == AppInstallState.INSTALLED_LATEST -> {
+                                        val launched = InstalledAppDetector.launchInstalledApp(context, app.packageName)
+                                        if (!launched) {
+                                            if (isApkDownloaded && downloadTask != null) {
+                                                onInstallDownloadedClick(downloadTask)
+                                            } else {
+                                                onStartDownload()
+                                            }
+                                        }
+                                        onDismiss()
+                                    }
+                                    liveState == AppInstallState.SIGNATURE_MISMATCH -> {
+                                        if (isApkDownloaded) {
+                                            onReplaceUninstallClick()
+                                        } else {
+                                            onStartDownload()
+                                        }
+                                    }
+                                    isApkDownloaded && downloadTask != null -> {
                                         onInstallDownloadedClick(downloadTask)
-                                    } else {
+                                    }
+                                    else -> {
                                         onStartDownload()
                                     }
                                 }
-                                onDismiss()
-                            }
-                            installState == AppInstallState.SIGNATURE_MISMATCH -> {
-                                if (isApkDownloaded) {
-                                    onReplaceUninstallClick()
-                                } else {
-                                    onStartDownload()
-                                }
-                            }
-                            isApkDownloaded && downloadTask != null -> {
-                                onInstallDownloadedClick(downloadTask)
-                            }
-                            else -> {
-                                onStartDownload()
                             }
                         }
                     }
@@ -782,29 +792,39 @@ fun AppDetailSheet(
                                 isPaused && downloadTask != null -> {
                                     onResumeDownload(downloadTask.id)
                                 }
-                                installState == AppInstallState.INSTALLED_LATEST -> {
-                                    val launched = InstalledAppDetector.launchInstalledApp(context, app.packageName)
-                                    if (!launched) {
-                                        if (isApkDownloaded && downloadTask != null) {
+                                else -> {
+                                    val liveState = InstalledAppDetector.checkState(
+                                        context = context,
+                                        packageName = app.packageName,
+                                        storeVersionCode = app.versionCode,
+                                        expectedSignatureSha256 = app.expectedSignatureSha256
+                                    )
+                                    when {
+                                        liveState == AppInstallState.INSTALLED_LATEST -> {
+                                            val launched = InstalledAppDetector.launchInstalledApp(context, app.packageName)
+                                            if (!launched) {
+                                                if (isApkDownloaded && downloadTask != null) {
+                                                    onInstallDownloadedClick(downloadTask)
+                                                } else {
+                                                    onStartDownload()
+                                                }
+                                            }
+                                            onDismiss()
+                                        }
+                                        liveState == AppInstallState.SIGNATURE_MISMATCH -> {
+                                            if (isApkDownloaded) {
+                                                onReplaceUninstallClick()
+                                            } else {
+                                                onStartDownload()
+                                            }
+                                        }
+                                        isApkDownloaded && downloadTask != null -> {
                                             onInstallDownloadedClick(downloadTask)
-                                        } else {
+                                        }
+                                        else -> {
                                             onStartDownload()
                                         }
                                     }
-                                    onDismiss()
-                                }
-                                installState == AppInstallState.SIGNATURE_MISMATCH -> {
-                                    if (isApkDownloaded) {
-                                        onReplaceUninstallClick()
-                                    } else {
-                                        onStartDownload()
-                                    }
-                                }
-                                isApkDownloaded && downloadTask != null -> {
-                                    onInstallDownloadedClick(downloadTask)
-                                }
-                                else -> {
-                                    onStartDownload()
                                 }
                             }
                         },

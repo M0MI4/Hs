@@ -101,11 +101,15 @@ fun AppsScreen(
         onIsScrollingChanged(lazyListState.isScrollInProgress)
     }
 
+    val publicApps = remember(apps) {
+        apps.filter { it.isPublished && it.downloadUrl.isNotBlank() }
+    }
+
     // Offload search and filtering from Main thread to Dispatchers.Default
-    val filteredApps by androidx.compose.runtime.produceState(initialValue = apps, apps, selectedCategoryIndex, searchQuery) {
+    val filteredApps by androidx.compose.runtime.produceState(initialValue = publicApps, publicApps, selectedCategoryIndex, searchQuery) {
         value = withContext(Dispatchers.Default) {
             val selectedRawCat = rawCategories.getOrElse(selectedCategoryIndex) { "All" }
-            var list = apps
+            var list = publicApps
             when (selectedRawCat) {
                 "Games" -> list = list.filter {
                     it.category.equals("Games", ignoreCase = true) ||
@@ -265,7 +269,7 @@ fun AppsScreen(
                 }
             }
 
-            if (apps.isEmpty() && isRefreshing) {
+            if (publicApps.isEmpty() && isRefreshing) {
                 items(
                     count = 5,
                     key = { "skeleton_$it" },

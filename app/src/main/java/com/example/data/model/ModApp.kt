@@ -34,7 +34,9 @@ data class ModApp(
     val downloadCount: Long = 0L,
     val requiresUninstallOfficial: Boolean = false,
     val glowColorHex: String = "",
-    val expectedSignatureSha256: String = ""
+    val expectedSignatureSha256: String = "",
+    @get:com.google.firebase.firestore.PropertyName("isPublished")
+    val isPublished: Boolean = true
 )
 
 @Immutable
@@ -81,6 +83,7 @@ data class DownloadTask(
     val appId: String = "",
     val appName: String = "",
     val version: String = "",
+    val versionCode: Int = 1,
     val iconUrl: String = "",
     val totalBytes: Long = 10485760L,
     val downloadedBytes: Long = 0L,
@@ -92,7 +95,8 @@ data class DownloadTask(
     val completedAt: Long? = null,
     val sha256: String = "",
     val downloadUrl: String = "",
-    val packageName: String = ""
+    val packageName: String = "",
+    val expectedSignatureSha256: String = ""
 )
 
 enum class NewsType {

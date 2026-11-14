@@ -16,7 +16,10 @@ import com.squareup.moshi.Types
 import com.squareup.moshi.kotlin.reflect.KotlinJsonAdapterFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -25,6 +28,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.tasks.await
 import java.io.InputStreamReader
 
@@ -39,6 +44,12 @@ data class RemoteSyncResult(
     val source: CatalogSource,
     val count: Int,
     val message: String
+)
+
+data class SeedDraftsSummary(
+    val addedCount: Int,
+    val skippedPublishedCount: Int,
+    val totalCount: Int
 )
 
 enum class SortOption {
@@ -226,6 +237,97 @@ class CatalogRepository(
     }
 
     /**
+     * Batch-writes all 51 preset apps into Cloud Firestore (/apps) as drafts
+     * (isPublished = false, downloadUrl = "", downloadCount = 0L, author = "HsStore")
+     * with automatically fetched 512x512 HD icons, without overwriting already-published apps.
+     */
+    suspend fun seedCatalogDrafts(
+        onProgress: ((completed: Int, total: Int) -> Unit)? = null
+    ): Result<SeedDraftsSummary> = runCatching {
+        val presets = com.example.data.catalog.PresetCatalog51.buildDraftModApps()
+        val existingSnapshot = appsCollection.get().await()
+        val existingById = existingSnapshot.documents.associateBy { it.id }
+
+        val toSeed = mutableListOf<ModApp>()
+        var skippedPublished = 0
+
+        for (preset in presets) {
+            val existingDoc = existingById[preset.id]
+            val isDocPublished = if (existingDoc != null) {
+                val explicitFlag = existingDoc.getBoolean("isPublished") ?: existingDoc.getBoolean("published")
+                val hasDownloadUrl = !existingDoc.getString("downloadUrl").isNullOrBlank()
+                explicitFlag == true || hasDownloadUrl
+            } else {
+                false
+            }
+            if (isDocPublished) {
+                skippedPublished++
+            } else {
+                toSeed.add(preset)
+            }
+        }
+
+        if (toSeed.isEmpty()) {
+            return@runCatching SeedDraftsSummary(
+                addedCount = 0,
+                skippedPublishedCount = skippedPublished,
+                totalCount = presets.size
+            )
+        }
+
+        val totalToProcess = toSeed.size
+        val semaphore = Semaphore(6)
+        val completedCount = java.util.concurrent.atomic.AtomicInteger(0)
+        onProgress?.invoke(0, totalToProcess)
+
+        val enrichedApps = coroutineScope {
+            toSeed.map { draft ->
+                async(Dispatchers.IO) {
+                    semaphore.withPermit {
+                        val hdIcon = com.example.util.IconFetcher.fetchHdIconUrl(
+                            appName = draft.name,
+                            packageName = draft.packageName,
+                            accentHex = draft.glowColorHex
+                        )
+                        val done = completedCount.incrementAndGet()
+                        onProgress?.invoke(done, totalToProcess)
+                        draft.copy(iconUrl = hdIcon)
+                    }
+                }
+            }.awaitAll()
+        }
+
+        // Batch-write into Cloud Firestore /apps (chunked safely under 500 ops limit)
+        enrichedApps.chunked(400).forEach { chunk ->
+            val batch = firestore.batch()
+            for (draftApp in chunk) {
+                val docRef = appsCollection.document(draftApp.id)
+                batch.set(docRef, draftApp, SetOptions.merge())
+            }
+            batch.commit().await()
+        }
+
+        repoPrefs.edit().putBoolean("catalog_has_seeded", true).apply()
+
+        // Cache into local Room and merge into StateFlow
+        try {
+            modAppDao.insertApps(enrichedApps.map { ModAppEntity.fromDomain(it) })
+        } catch (e: Exception) {
+            Log.w("CatalogRepo", "Room cache warning after seed: ${e.message}")
+        }
+
+        val seededMap = enrichedApps.associateBy { it.id }
+        val merged = (_firestoreApps.value.filter { !seededMap.containsKey(it.id) } + enrichedApps)
+        _firestoreApps.value = applyCustomOrder(merged)
+
+        SeedDraftsSummary(
+            addedCount = enrichedApps.size,
+            skippedPublishedCount = skippedPublished,
+            totalCount = presets.size
+        )
+    }
+
+    /**
      * Saves an app directly to Firestore /apps/{appId} and updates local Room cache.
      */
     suspend fun saveApp(app: ModApp): Result<Unit> = runCatching {
@@ -240,6 +342,8 @@ class CatalogRepository(
         )
         docRef.set(dataToSave, SetOptions.merge()).await()
         modAppDao.insertApp(ModAppEntity.fromDomain(dataToSave))
+        val updated = _firestoreApps.value.filter { it.id != dataToSave.id } + dataToSave
+        _firestoreApps.value = applyCustomOrder(updated)
     }
 
     /**

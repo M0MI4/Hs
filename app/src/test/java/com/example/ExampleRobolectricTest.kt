@@ -285,7 +285,27 @@ class ExampleRobolectricTest {
       versionCode = 2
     )
 
-    // Seeded task app_cyber_vpn already exists in DownloadRepository as COMPLETED with a real file
+    val apkFile = vm.downloadRepo.apkFileForApp("app_cyber_vpn")
+    apkFile.parentFile?.mkdirs()
+    apkFile.writeBytes(byteArrayOf(0x50, 0x4B, 0x03, 0x04))
+    val seededTask = com.example.data.model.DownloadTask(
+      id = "dl_cyber_vpn_test",
+      appId = modApp.id,
+      appName = modApp.name,
+      version = modApp.version,
+      versionCode = modApp.versionCode,
+      packageName = modApp.packageName,
+      totalBytes = 4L,
+      downloadedBytes = 4L,
+      progress = 1.0f,
+      status = com.example.data.model.DownloadStatus.COMPLETED,
+      filePath = apkFile.absolutePath,
+      completedAt = System.currentTimeMillis()
+    )
+    kotlinx.coroutines.runBlocking {
+      vm.downloadRepo.upsertSavedTask(seededTask)
+    }
+
     vm.initiateReplaceUninstall(app, modApp)
     assertEquals("app_cyber_vpn", vm.pendingReplaceAppId.value)
 
@@ -299,5 +319,315 @@ class ExampleRobolectricTest {
     val afterUninstall = vm.checkAndAutoInstallPendingReplace(app, listOf(modApp))
     assertEquals(true, afterUninstall)
     assertEquals(null, vm.pendingReplaceAppId.value)
+  }
+
+  @Test
+  fun `download repository persists completed and interrupted tasks across restarts in filesDir apks`() {
+    val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+    val dao = com.example.data.local.AppDatabase.getInstance(app).downloadTaskDao()
+    val repo1 = com.example.data.repository.DownloadRepository(app, dao)
+
+    val completedFile = repo1.apkFileForApp("persist_completed")
+    completedFile.parentFile?.mkdirs()
+    completedFile.writeBytes(ByteArray(256) { 1 })
+    assertEquals(true, completedFile.absolutePath.contains("apks"))
+    assertEquals(false, completedFile.absolutePath.contains("cache"))
+
+    val partialFile = repo1.apkFileForApp("persist_interrupted")
+    partialFile.writeBytes(ByteArray(100) { 2 })
+
+    val missingFile = repo1.apkFileForApp("persist_missing")
+    if (missingFile.exists()) missingFile.delete()
+
+    kotlinx.coroutines.runBlocking {
+      dao.upsertTask(
+        com.example.data.local.DownloadTaskEntity.fromDomain(
+          com.example.data.model.DownloadTask(
+            id = "dl_done",
+            appId = "persist_completed",
+            appName = "Completed Mod",
+            version = "2.0",
+            versionCode = 20,
+            packageName = "com.example.done",
+            totalBytes = 256L,
+            downloadedBytes = 256L,
+            progress = 1.0f,
+            status = com.example.data.model.DownloadStatus.COMPLETED,
+            filePath = completedFile.absolutePath
+          )
+        )
+      )
+      dao.upsertTask(
+        com.example.data.local.DownloadTaskEntity.fromDomain(
+          com.example.data.model.DownloadTask(
+            id = "dl_interrupted",
+            appId = "persist_interrupted",
+            appName = "Interrupted Mod",
+            version = "1.5",
+            versionCode = 15,
+            packageName = "com.example.interrupted",
+            totalBytes = 400L,
+            downloadedBytes = 50L,
+            progress = 0.125f,
+            status = com.example.data.model.DownloadStatus.DOWNLOADING,
+            filePath = partialFile.absolutePath
+          )
+        )
+      )
+      dao.upsertTask(
+        com.example.data.local.DownloadTaskEntity.fromDomain(
+          com.example.data.model.DownloadTask(
+            id = "dl_missing",
+            appId = "persist_missing",
+            appName = "Deleted APK Mod",
+            version = "1.0",
+            versionCode = 1,
+            packageName = "com.example.missing",
+            totalBytes = 100L,
+            downloadedBytes = 100L,
+            progress = 1.0f,
+            status = com.example.data.model.DownloadStatus.COMPLETED,
+            filePath = missingFile.absolutePath
+          )
+        )
+      )
+    }
+
+    // Fresh repository instance simulating cold app restart
+    val repo2 = com.example.data.repository.DownloadRepository(app, dao)
+    kotlinx.coroutines.runBlocking {
+      repo2.restoreSavedTasks()
+    }
+    val restored = repo2.tasks.value
+
+    val restoredCompleted = restored.find { it.appId == "persist_completed" }
+    assertEquals(com.example.data.model.DownloadStatus.COMPLETED, restoredCompleted?.status)
+    assertEquals(1.0f, restoredCompleted?.progress)
+    assertEquals(completedFile.absolutePath, restoredCompleted?.filePath)
+
+    val restoredPaused = restored.find { it.appId == "persist_interrupted" }
+    assertEquals(com.example.data.model.DownloadStatus.PAUSED, restoredPaused?.status)
+    assertEquals(100L, restoredPaused?.downloadedBytes)
+
+    // Missing APK file record must be cleaned up
+    assertEquals(null, restored.find { it.appId == "persist_missing" })
+  }
+
+  @Test
+  fun `installOrReplaceCompletedApk blocks installApk and launches ACTION_DELETE on signature mismatch`() {
+    val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+    if (com.google.firebase.FirebaseApp.getApps(app).isEmpty()) {
+      try {
+        com.google.firebase.FirebaseApp.initializeApp(
+          app,
+          com.google.firebase.FirebaseOptions.Builder()
+            .setApplicationId("com.aistudio.hsstore.modapk")
+            .setProjectId("test-project")
+            .setApiKey("fake-api-key-for-test")
+            .build()
+        )
+      } catch (_: Exception) {}
+    }
+
+    val shadowPm = org.robolectric.Shadows.shadowOf(app.packageManager)
+    val shadowApp = org.robolectric.Shadows.shadowOf(app)
+    val pkgName = "com.example.officialmismatch"
+    val officialSig = android.content.pm.Signature("official-store-cert".toByteArray())
+    val signingInfoObj = android.content.pm.SigningInfo::class.java
+      .getConstructor(
+        Int::class.javaPrimitiveType,
+        Collection::class.java,
+        Collection::class.java,
+        Collection::class.java
+      )
+      .newInstance(3, listOf(officialSig), emptyList<android.content.pm.Signature>(), emptyList<Int>())
+    val pkgInfo = android.content.pm.PackageInfo().apply {
+      packageName = pkgName
+      longVersionCode = 5L
+      signingInfo = signingInfoObj
+      @Suppress("DEPRECATION")
+      signatures = arrayOf(officialSig)
+    }
+    shadowPm.installPackage(pkgInfo)
+    com.example.util.InstalledAppDetector.invalidateCache(pkgName)
+
+    val vm = com.example.ui.viewmodel.DownloadsViewModel(app)
+    val apkFile = vm.downloadRepo.apkFileForApp("app_mismatch_guard")
+    apkFile.parentFile?.mkdirs()
+    apkFile.writeBytes(byteArrayOf(0x50, 0x4B, 0x03, 0x04))
+
+    val modApp = com.example.data.model.ModApp(
+      id = "app_mismatch_guard",
+      name = "Mismatched Mod",
+      packageName = pkgName,
+      version = "5.0",
+      versionCode = 5
+    )
+    val task = com.example.data.model.DownloadTask(
+      id = "dl_mismatch_guard",
+      appId = modApp.id,
+      appName = modApp.name,
+      version = modApp.version,
+      versionCode = modApp.versionCode,
+      packageName = pkgName,
+      totalBytes = 4L,
+      downloadedBytes = 4L,
+      progress = 1.0f,
+      status = com.example.data.model.DownloadStatus.COMPLETED,
+      filePath = apkFile.absolutePath
+    )
+
+    // Drain any previous started activities
+    while (shadowApp.nextStartedActivity != null) {}
+
+    vm.installOrReplaceCompletedApk(app, task, modApp)
+
+    assertEquals(modApp.id, vm.pendingReplaceAppId.value)
+    val launched = shadowApp.nextStartedActivity
+    assertEquals(android.content.Intent.ACTION_DELETE, launched?.action)
+    assertEquals("package:$pkgName", launched?.dataString)
+    // Ensure ACTION_VIEW APK installer was NOT launched
+    assertEquals(null, shadowApp.nextStartedActivity)
+  }
+
+  @Test
+  fun `manifest declares REQUEST_DELETE_PACKAGES and settings keeps Engine Architecture and Publisher in English`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val pkgInfo = context.packageManager.getPackageInfo(
+      context.packageName,
+      android.content.pm.PackageManager.GET_PERMISSIONS
+    )
+    val permissions = pkgInfo.requestedPermissions?.toList().orEmpty()
+    assertEquals(true, permissions.contains(android.Manifest.permission.REQUEST_DELETE_PACKAGES))
+
+    assertEquals(
+      "Engine Architecture",
+      com.example.ui.i18n.LocalizedStrings.get("settings_engine_title", com.example.ui.i18n.AppLanguage.ENGLISH)
+    )
+    assertEquals(
+      "Engine Architecture",
+      com.example.ui.i18n.LocalizedStrings.get("settings_engine_title", com.example.ui.i18n.AppLanguage.KURDISH_SORANI)
+    )
+
+    val publisherKeys = listOf(
+      "hama_sade_team_title" to "OFFICIAL PUBLISHER",
+      "hama_sade_team_subtitle" to "Official Publisher & Community Partner",
+      "hama_sade_team_bio" to "Official publisher & Telegram channel partner. Join our Telegram channel for the latest mod releases, news, and update announcements.",
+      "action_join_telegram" to "Join Telegram"
+    )
+    for ((key, expected) in publisherKeys) {
+      assertEquals(
+        expected,
+        com.example.ui.i18n.LocalizedStrings.get(key, com.example.ui.i18n.AppLanguage.KURDISH_SORANI)
+      )
+    }
+  }
+
+  @Test
+  fun `preset catalog builds all 51 draft apps and games with HsStore defaults`() {
+    val drafts = com.example.data.catalog.PresetCatalog51.buildDraftModApps()
+    assertEquals(51, drafts.size)
+    assertEquals(51, drafts.map { it.id }.toSet().size)
+    assertEquals(40, drafts.count { it.category == "Apps" })
+    assertEquals(11, drafts.count { it.category == "Games" })
+
+    for (app in drafts) {
+      assertEquals(false, app.isPublished)
+      assertEquals("", app.downloadUrl)
+      assertEquals(0L, app.downloadCount)
+      assertEquals("HsStore", app.author)
+      assertEquals(true, app.name.isNotBlank())
+      assertEquals(true, app.description.isNotBlank())
+      assertEquals(true, app.glowColorHex.startsWith("#"))
+      assertEquals(false, app.version.startsWith("v", ignoreCase = true))
+    }
+
+    val snapPrime = drafts.first { it.id == "preset_01_snapchat_prime_v6" }
+    assertEquals("Snapchat Prime V6", snapPrime.name)
+    assertEquals("6.0", snapPrime.version)
+    assertEquals("com.snapchat.android", snapPrime.packageName)
+    assertEquals("177.6 MB", snapPrime.sizeDisplay)
+
+    val mc = drafts.first { it.id == "preset_50_minecraft" }
+    assertEquals("Minecraft", mc.name)
+    assertEquals("Games", mc.category)
+    assertEquals("com.mojang.minecraftpe", mc.packageName)
+  }
+
+  @Test
+  fun `icon fetcher parses 512px iTunes artwork upgrades 100px URLs and normalizes search terms`() {
+    assertEquals("Snapchat", com.example.util.IconFetcher.buildSearchTerm("Snapchat Prime V6", "com.snapchat.android"))
+    assertEquals("Grand Theft Auto San Andreas", com.example.util.IconFetcher.buildSearchTerm("GTA San Andreas Kurdish"))
+
+    val jsonWith512 = """
+      {"resultCount":1,"results":[{"artworkUrl512":"https://is1-ssl.mzstatic.com/image/thumb/Purple/512x512bb.jpg","artworkUrl100":"https://is1-ssl.mzstatic.com/image/thumb/Purple/100x100bb.jpg"}]}
+    """.trimIndent()
+    assertEquals(
+      "https://is1-ssl.mzstatic.com/image/thumb/Purple/512x512bb.jpg",
+      com.example.util.IconFetcher.extractItunesArtwork512Url(jsonWith512)
+    )
+
+    val jsonWith100Only = """
+      {"resultCount":1,"results":[{"artworkUrl100":"https://is1-ssl.mzstatic.com/image/thumb/Purple/100x100bb.jpg"}]}
+    """.trimIndent()
+    assertEquals(
+      "https://is1-ssl.mzstatic.com/image/thumb/Purple/512x512bb.jpg",
+      com.example.util.IconFetcher.extractItunesArtwork512Url(jsonWith100Only)
+    )
+
+    val monogram = com.example.util.IconFetcher.buildHighResMonogramUrl("HS Lab Kurd Prime", "#6C5CE7")
+    assertEquals(true, monogram.contains("size=512"))
+    assertEquals(true, monogram.contains("background=6C5CE7"))
+    assertEquals(true, monogram.contains("format=png"))
+    assertEquals(true, monogram.contains("name=HL"))
+  }
+
+  @Test
+  fun `room database persists ModApp isPublished draft flag and filters public catalog`() {
+    val context = ApplicationProvider.getApplicationContext<Context>()
+    val dao = com.example.data.local.AppDatabase.getInstance(context).modAppDao()
+
+    val draftApp = com.example.data.model.ModApp(
+      id = "draft_only_app",
+      name = "Draft App",
+      downloadUrl = "",
+      isPublished = false,
+      author = "HsStore"
+    )
+    val publishedNoUrl = com.example.data.model.ModApp(
+      id = "pub_no_url",
+      name = "Missing Url App",
+      downloadUrl = "   ",
+      isPublished = true,
+      author = "HsStore"
+    )
+    val liveApp = com.example.data.model.ModApp(
+      id = "live_ready_app",
+      name = "Live Ready App",
+      downloadUrl = "https://cdn.example.com/live.apk",
+      isPublished = true,
+      author = "HsStore"
+    )
+
+    kotlinx.coroutines.runBlocking {
+      dao.insertApps(
+        listOf(
+          com.example.data.local.ModAppEntity.fromDomain(draftApp),
+          com.example.data.local.ModAppEntity.fromDomain(publishedNoUrl),
+          com.example.data.local.ModAppEntity.fromDomain(liveApp)
+        )
+      )
+      val savedDraft = dao.getAppById("draft_only_app")?.toDomain()
+      assertEquals(false, savedDraft?.isPublished)
+
+      val savedLive = dao.getAppById("live_ready_app")?.toDomain()
+      assertEquals(true, savedLive?.isPublished)
+    }
+
+    val allApps = listOf(draftApp, publishedNoUrl, liveApp)
+    val publicOnly = allApps.filter { it.isPublished && it.downloadUrl.isNotBlank() }
+    assertEquals(listOf("live_ready_app"), publicOnly.map { it.id })
+    assertEquals("DRAFT", com.example.ui.i18n.LocalizedStrings.get("badge_draft", com.example.ui.i18n.AppLanguage.ENGLISH))
+    assertEquals("ڕەشنووس", com.example.ui.i18n.LocalizedStrings.get("badge_draft", com.example.ui.i18n.AppLanguage.KURDISH_SORANI))
   }
 }

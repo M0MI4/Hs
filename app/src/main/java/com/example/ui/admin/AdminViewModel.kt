@@ -32,6 +32,8 @@ data class AdminState(
     val isAdminLoggedIn: Boolean = false,
     val currentAdminEmail: String? = null,
     val isLoading: Boolean = false,
+    val isSeedingCatalog: Boolean = false,
+    val seedProgressText: String? = null,
     val errorMessage: String? = null,
     val successMessage: String? = null
 )
@@ -268,14 +270,73 @@ class AdminViewModel(
         _adminState.value = _adminState.value.copy(errorMessage = null, successMessage = null)
     }
 
+    fun seed51CatalogDrafts() {
+        if (_adminState.value.isSeedingCatalog) return
+        viewModelScope.launch {
+            _adminState.value = _adminState.value.copy(
+                isLoading = true,
+                isSeedingCatalog = true,
+                seedProgressText = "Checking Firestore catalog...",
+                errorMessage = null,
+                successMessage = null
+            )
+            val result = catalogRepository.seedCatalogDrafts { completed, total ->
+                _adminState.value = _adminState.value.copy(
+                    seedProgressText = "Fetching HD Icons ($completed/$total)..."
+                )
+            }
+            if (result.isSuccess) {
+                val summary = result.getOrNull()!!
+                val msg = if (summary.addedCount == 0 && summary.skippedPublishedCount > 0) {
+                    "All ${summary.skippedPublishedCount} matching apps are already published — nothing overwritten."
+                } else {
+                    "Seeded ${summary.addedCount} draft apps with HD 512x512 icons to /apps (skipped ${summary.skippedPublishedCount} published)!"
+                }
+                _adminState.value = _adminState.value.copy(
+                    isLoading = false,
+                    isSeedingCatalog = false,
+                    seedProgressText = null,
+                    successMessage = msg
+                )
+            } else {
+                val ex = result.exceptionOrNull()
+                val errorMsg = if (ex is FirebaseFirestoreException) {
+                    "Firestore [${ex.code}]: ${ex.localizedMessage ?: "Seed write permission denied"}"
+                } else {
+                    ex?.localizedMessage ?: "Failed to seed 51 catalog drafts."
+                }
+                Log.e("AdminViewModel", "seed51CatalogDrafts failed: $errorMsg", ex)
+                _adminState.value = _adminState.value.copy(
+                    isLoading = false,
+                    isSeedingCatalog = false,
+                    seedProgressText = null,
+                    errorMessage = errorMsg
+                )
+            }
+        }
+    }
+
+    suspend fun fetchHdIconForApp(
+        appName: String,
+        packageName: String = "",
+        glowColorHex: String = ""
+    ): String {
+        return com.example.util.IconFetcher.fetchHdIconUrl(
+            appName = appName,
+            packageName = packageName,
+            accentHex = glowColorHex.ifBlank { "#007AFF" }
+        )
+    }
+
     fun saveApp(app: ModApp, onComplete: () -> Unit = {}) {
         viewModelScope.launch {
             _adminState.value = _adminState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
             val result = catalogRepository.saveApp(app)
             if (result.isSuccess) {
+                val label = if (app.isPublished) "published to" else "saved as draft in"
                 _adminState.value = _adminState.value.copy(
                     isLoading = false,
-                    successMessage = "App '${app.name}' successfully published to Firestore (/apps)!"
+                    successMessage = "App '${app.name}' successfully $label Firestore (/apps)!"
                 )
                 onComplete()
             } else {

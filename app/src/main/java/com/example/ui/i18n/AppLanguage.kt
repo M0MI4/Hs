@@ -192,10 +192,11 @@ object LocalizedStrings {
         // Offline & Team Profile
         "status_offline" to "Offline",
         "status_offline_desc" to "Browsing cached apps",
-        "hama_sade_team_title" to "HAMA SADE TEAM",
-        "hama_sade_team_subtitle" to "Lead Architecture & Cyber Modding Collective",
-        "hama_sade_team_bio" to "Official project creator & maintainer. Join for VIP mod drops, direct support, and update announcements.",
-        "action_join_telegram" to "Join Telegram"
+        "hama_sade_team_title" to "OFFICIAL PUBLISHER",
+        "hama_sade_team_subtitle" to "Official Publisher & Community Partner",
+        "hama_sade_team_bio" to "Official publisher & Telegram channel partner. Join our Telegram channel for the latest mod releases, news, and update announcements.",
+        "action_join_telegram" to "Join Telegram",
+        "badge_draft" to "DRAFT"
     )
 
     private val ku = mapOf(
@@ -311,15 +312,16 @@ object LocalizedStrings {
         "settings_account_signed_out" to "بچۆ ژوورەوە بۆ پاراستنی نیشانەکانت لە هەور",
         "settings_about_section" to "دەربارەی HSSTORE",
         "settings_version_title" to "وەشانی HSSTORE",
-        "settings_engine_title" to "تەلارسازیی ماتۆڕ",
+        "settings_engine_title" to "Engine Architecture",
         "settings_dev_team" to "تیمی گەشەپێدان",
 
-        // Offline & Team Profile
+        // Offline & Publisher Profile (English-only Publisher Card)
         "status_offline" to "ئۆفلاین",
         "status_offline_desc" to "بەرنامە هەڵگیراوەکان پیشان دەدرێن",
-        "hama_sade_team_title" to "HAMA SADE TEAM",
-        "hama_sade_team_subtitle" to "تەلارسازی و مۆدسازی پێشکەوتوو",
-        "hama_sade_team_bio" to "دروستکەر و سەرپەرشتیاری فەرمی پرۆژەکە. بەشداربە لە کەناڵی تەلەگرام بۆ نوێترین مۆدەکان و وەشانی نوێ.",
-        "action_join_telegram" to "چوون بۆ تەلەگرام"
+        "hama_sade_team_title" to "OFFICIAL PUBLISHER",
+        "hama_sade_team_subtitle" to "Official Publisher & Community Partner",
+        "hama_sade_team_bio" to "Official publisher & Telegram channel partner. Join our Telegram channel for the latest mod releases, news, and update announcements.",
+        "action_join_telegram" to "Join Telegram",
+        "badge_draft" to "ڕەشنووس"
     )
 }

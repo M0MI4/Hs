@@ -488,7 +488,7 @@ fun BannerNewsCard(
 ) {
     val linkedApp = remember(news.linkedAppId, appsCatalog) {
         if (news.linkedAppId != null) {
-            appsCatalog.find { it.id == news.linkedAppId }
+            appsCatalog.find { it.id == news.linkedAppId && it.isPublished && it.downloadUrl.isNotBlank() }
         } else null
     }
 
@@ -979,7 +979,7 @@ fun NewsDetailModalSheet(
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val linkedApp = remember(news.linkedAppId, appsCatalog) {
-        if (news.linkedAppId != null) appsCatalog.find { it.id == news.linkedAppId } else null
+        if (news.linkedAppId != null) appsCatalog.find { it.id == news.linkedAppId && it.isPublished && it.downloadUrl.isNotBlank() } else null
     }
 
     ModalBottomSheet(

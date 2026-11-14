@@ -116,13 +116,14 @@ fun ModAppCard(
         if (app.modFeatures.isNotEmpty()) "⚡ " + app.modFeatures.joinToString(" • ") else ""
     }
 
-    val imageRequest = remember(app.iconUrl, app.packageName, app.versionCode) {
+    val imageRequest = remember(app.id, app.iconUrl, app.packageName, app.versionCode) {
         if (app.iconUrl.isNotBlank()) {
+            val cacheKey = "mod_icon_${app.id}_${app.iconUrl.hashCode()}"
             ImageRequest.Builder(context)
                 .data(app.iconUrl)
                 .size(186, 186)
-                .memoryCacheKey("mod_icon_${app.packageName}_${app.versionCode}")
-                .diskCacheKey("mod_icon_${app.packageName}_${app.versionCode}")
+                .memoryCacheKey(cacheKey)
+                .diskCacheKey(cacheKey)
                 .allowHardware(true)
                 .crossfade(false)
                 .build()
@@ -257,29 +258,39 @@ fun ModAppCard(
                                 isPaused && downloadTask != null -> {
                                     onResumeDownloadClick(downloadTask.id)
                                 }
-                                installState == AppInstallState.INSTALLED_LATEST -> {
-                                    val launched = InstalledAppDetector.launchInstalledApp(context, app.packageName)
-                                    if (!launched) {
-                                        if (isApkDownloaded && downloadTask != null) {
+                                else -> {
+                                    val liveState = InstalledAppDetector.checkState(
+                                        context = context,
+                                        packageName = app.packageName,
+                                        storeVersionCode = app.versionCode,
+                                        expectedSignatureSha256 = app.expectedSignatureSha256
+                                    )
+                                    when {
+                                        liveState == AppInstallState.INSTALLED_LATEST -> {
+                                            val launched = InstalledAppDetector.launchInstalledApp(context, app.packageName)
+                                            if (!launched) {
+                                                if (isApkDownloaded && downloadTask != null) {
+                                                    onInstallDownloadedClick(downloadTask)
+                                                } else {
+                                                    onDownloadClick()
+                                                }
+                                            }
+                                        }
+                                        liveState == AppInstallState.SIGNATURE_MISMATCH -> {
+                                            if (isApkDownloaded) {
+                                                onReplaceUninstallClick()
+                                            } else {
+                                                // Download First, Then Replace
+                                                onDownloadClick()
+                                            }
+                                        }
+                                        isApkDownloaded && downloadTask != null -> {
                                             onInstallDownloadedClick(downloadTask)
-                                        } else {
+                                        }
+                                        else -> {
                                             onDownloadClick()
                                         }
                                     }
-                                }
-                                installState == AppInstallState.SIGNATURE_MISMATCH -> {
-                                    if (isApkDownloaded) {
-                                        onReplaceUninstallClick()
-                                    } else {
-                                        // Download First, Then Replace
-                                        onDownloadClick()
-                                    }
-                                }
-                                isApkDownloaded && downloadTask != null -> {
-                                    onInstallDownloadedClick(downloadTask)
-                                }
-                                else -> {
-                                    onDownloadClick()
                                 }
                             }
                         }

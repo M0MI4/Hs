@@ -459,7 +459,8 @@ fun MainAppContent(
                                 Toast.makeText(context, "Added ${app.name} to downloads", Toast.LENGTH_SHORT).show()
                             },
                             onInstallDownloadedApp = { task ->
-                                val res = downloadsViewModel.installApk(context, task)
+                                val matching = apps.find { it.id == task.appId }
+                                val res = downloadsViewModel.installOrReplaceCompletedApk(context, task, matching)
                                 if (res.isFailure) {
                                     Toast.makeText(context, "Installer: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
                                 }
@@ -489,7 +490,8 @@ fun MainAppContent(
                             onResume = { downloadsViewModel.resumeDownload(it) },
                             onCancel = { downloadsViewModel.cancelDownload(it) },
                             onInstall = { task ->
-                                val res = downloadsViewModel.installApk(context, task)
+                                val matching = apps.find { it.id == task.appId || (task.packageName.isNotBlank() && it.packageName == task.packageName) }
+                                val res = downloadsViewModel.installOrReplaceCompletedApk(context, task, matching)
                                 if (res.isFailure) {
                                     Toast.makeText(context, "Installer: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
                                 }
@@ -678,7 +680,7 @@ fun MainAppContent(
                         Toast.makeText(context, "Downloading ${detailApp.name}...", Toast.LENGTH_SHORT).show()
                     },
                     onInstallDownloadedClick = { task ->
-                        val res = downloadsViewModel.installApk(context, task)
+                        val res = downloadsViewModel.installOrReplaceCompletedApk(context, task, detailApp)
                         if (res.isFailure) {
                             Toast.makeText(context, "Installer: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
                         }

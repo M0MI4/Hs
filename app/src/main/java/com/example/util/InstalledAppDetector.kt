@@ -111,6 +111,26 @@ object InstalledAppDetector {
         )
     }
 
+    /**
+     * Performs a fresh live PackageManager inspection (updating cache) so install/replace
+     * actions never make decisions from stale cached state.
+     */
+    fun checkState(
+        context: Context,
+        packageName: String,
+        storeVersionCode: Int,
+        expectedSignatureSha256: String = ""
+    ): AppInstallState {
+        if (packageName.isBlank()) return AppInstallState.NOT_INSTALLED
+        val freshInfo = inspectInstalledApp(context, packageName)
+        appInfoCache[packageName] = freshInfo
+        return evaluateState(
+            info = freshInfo,
+            storeVersionCode = storeVersionCode,
+            expectedSignatureSha256 = expectedSignatureSha256
+        )
+    }
+
     fun evaluateState(
         info: InstalledAppInfo,
         storeVersionCode: Int,
@@ -187,10 +207,11 @@ object InstalledAppDetector {
         _packageStateVersion.value = _packageStateVersion.value + 1
     }
 
-    fun uninstallPackage(context: Context, packageName: String): Boolean {
+    fun uninstallApp(context: Context, packageName: String): Boolean {
         if (packageName.isBlank()) return false
         return try {
-            val intent = Intent(Intent.ACTION_DELETE, Uri.parse("package:$packageName")).apply {
+            val intent = Intent(Intent.ACTION_DELETE).apply {
+                data = Uri.parse("package:$packageName")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
             context.startActivity(intent)
@@ -200,6 +221,9 @@ object InstalledAppDetector {
             false
         }
     }
+
+    fun uninstallPackage(context: Context, packageName: String): Boolean =
+        uninstallApp(context, packageName)
 
     fun launchInstalledApp(context: Context, packageName: String): Boolean {
         if (packageName.isBlank()) return false
