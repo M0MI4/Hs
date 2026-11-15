@@ -119,4 +119,45 @@ class CupertinoTabBarRobolectricTest {
         composeTestRule.waitForIdle()
         assertEquals(MainTab.SETTINGS, currentTab)
     }
+
+    @Test
+    fun `holding over 150ms and dragging moves droplet directly under finger and snaps to nearest tab`() {
+        var currentTab by mutableStateOf(MainTab.TODAY)
+
+        composeTestRule.setContent {
+            val bg = Color(0xFF0A0E17)
+            val backdrop = rememberLayerBackdrop {
+                drawRect(bg)
+                drawContent()
+            }
+            Box(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(bg)
+                        .layerBackdrop(backdrop)
+                )
+                CupertinoFloatingTabBar(
+                    currentTab = currentTab,
+                    onTabSelected = { currentTab = it },
+                    currentLanguage = AppLanguage.ENGLISH,
+                    isDarkTheme = true,
+                    activeDownloadsCount = 0,
+                    backdrop = backdrop
+                )
+            }
+        }
+
+        // Hold > 150ms then drag to the 3rd tab (Downloads ~ 62% of bar width)
+        composeTestRule.onNodeWithTag("cupertino_floating_tab_bar").performTouchInput {
+            down(androidx.compose.ui.geometry.Offset(width * 0.15f, centerY))
+            advanceEventTime(200L)
+            moveTo(androidx.compose.ui.geometry.Offset(width * 0.62f, centerY))
+            advanceEventTime(60L)
+            up()
+        }
+        composeTestRule.waitForIdle()
+        assertEquals(MainTab.DOWNLOADS, currentTab)
+        composeTestRule.onNodeWithTag("liquid_glass_droplet").assertIsDisplayed()
+    }
 }

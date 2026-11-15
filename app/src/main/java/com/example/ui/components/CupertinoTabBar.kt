@@ -83,6 +83,7 @@ import com.kyant.backdrop.drawBackdrop
 import com.kyant.backdrop.effects.blur
 import com.kyant.backdrop.effects.lens
 import com.kyant.backdrop.effects.vibrancy
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -91,16 +92,18 @@ private val TabBarShape = RoundedCornerShape(32.dp)
 private val DropletShape = RoundedCornerShape(26.dp)
 private val TabItemShape = RoundedCornerShape(24.dp)
 
+private const val HOLD_ACTIVATION_DELAY_MS = 150L
+
 /**
- * Interactive Liquid Glass Floating Tab Bar inspired by Kyant0/AndroidLiquidGlass LiquidBottomTabs.
+ * Apple iOS 26 Liquid Glass Floating Tab Bar inspired by Kyant0/AndroidLiquidGlass LiquidBottomTabs.
  *
  * - Captures only the outer main content layer via [backdrop] (120fps LazyColumn scrolling preserved).
- * - On Android 13+ (API 33+): renders a frosted Liquid Glass pill container AND an interactive
- *   gliding Liquid Glass Droplet sitting BEHIND the crisp tab items with crystal-clear lens refraction
- *   (no blur on droplet), chromatic aberration, specular rim highlights, jelly velocity stretch/squash,
- *   and press/drag magnification.
- * - On Android 12 and below (API < 33): falls back gracefully to a translucent Surface + interactive
- *   glass capsule so older devices never crash while keeping drag/snap/jelly physics intact.
+ * - Outer bar (API 33+): rich frosted glass using blur(24.dp) + vibrancy + high-opacity frost tint
+ *   so sharp background text dissolves smoothly behind crisp tab icons.
+ * - Resting / Quick Tap State: clean, subtle frosted pill with zero lens distortion.
+ * - Hold (>150ms) / Drag State: inflates into a crystal-clear refractive Liquid Glass Droplet
+ *   directly under the user's finger (`change.position.x`) with chromatic aberration, jelly stretch,
+ *   specular rim, haptic feedback, and nearest-tab spring snap back to the clean frosted pill.
  */
 @Composable
 fun CupertinoFloatingTabBar(
@@ -118,15 +121,15 @@ fun CupertinoFloatingTabBar(
         Brush.linearGradient(
             colors = if (isDarkTheme) {
                 listOf(
-                    Color.White.copy(alpha = 0.36f),
-                    Color.White.copy(alpha = 0.10f),
-                    Color.White.copy(alpha = 0.24f)
+                    Color.White.copy(alpha = 0.34f),
+                    Color.White.copy(alpha = 0.08f),
+                    Color.White.copy(alpha = 0.22f)
                 )
             } else {
                 listOf(
-                    Color.White.copy(alpha = 0.85f),
-                    Color.White.copy(alpha = 0.30f),
-                    Color.White.copy(alpha = 0.65f)
+                    Color.White.copy(alpha = 0.90f),
+                    Color.White.copy(alpha = 0.35f),
+                    Color.White.copy(alpha = 0.70f)
                 )
             }
         )
@@ -139,34 +142,29 @@ fun CupertinoFloatingTabBar(
         .testTag("cupertino_floating_tab_bar")
 
     if (useLiquidGlass && backdrop != null) {
-        val tintColor = if (isDarkTheme) {
-            Color.Black.copy(alpha = 0.28f)
+        val frostedTintColor = if (isDarkTheme) {
+            Color(0xFF141824).copy(alpha = 0.72f)
         } else {
-            Color.White.copy(alpha = 0.55f)
+            Color.White.copy(alpha = 0.78f)
         }
 
         Box(
             modifier = containerModifier
                 .shadow(
-                    elevation = if (isDarkTheme) 10.dp else 12.dp,
+                    elevation = if (isDarkTheme) 12.dp else 14.dp,
                     shape = TabBarShape,
-                    ambientColor = Color.Black.copy(alpha = 0.18f),
-                    spotColor = Color.Black.copy(alpha = 0.18f)
+                    ambientColor = Color.Black.copy(alpha = 0.20f),
+                    spotColor = Color.Black.copy(alpha = 0.20f)
                 )
                 .drawBackdrop(
                     backdrop = backdrop,
                     shape = { TabBarShape },
                     effects = {
                         vibrancy()
-                        blur(20f.dp.toPx())
-                        lens(
-                            refractionHeight = 12f.dp.toPx(),
-                            refractionAmount = 16f.dp.toPx(),
-                            chromaticAberration = false
-                        )
+                        blur(24f.dp.toPx())
                     },
                     onDrawSurface = {
-                        drawRect(tintColor)
+                        drawRect(frostedTintColor)
                     }
                 )
                 .border(1.dp, specularBorderBrush, TabBarShape)
@@ -182,9 +180,9 @@ fun CupertinoFloatingTabBar(
         }
     } else {
         val fallbackBg = if (isDarkTheme) {
-            Color(0xFF1C1C1E).copy(alpha = 0.92f)
+            Color(0xFF141824).copy(alpha = 0.92f)
         } else {
-            Color(0xFFFFFFFF).copy(alpha = 0.95f)
+            Color.White.copy(alpha = 0.95f)
         }
 
         val fallbackBorder = if (isDarkTheme) {
@@ -231,18 +229,33 @@ private fun InteractiveLiquidTabBarContent(
     val latestOnTabSelected by rememberUpdatedState(onTabSelected)
     val latestSelectedIndex by rememberUpdatedState(selectedIndex)
 
-    var isPressed by remember { mutableStateOf(false) }
+    var isPointerDown by remember { mutableStateOf(false) }
+    var isHoldActivated by remember { mutableStateOf(false) }
     var isDragging by remember { mutableStateOf(false) }
+    var latestTouchX by remember { mutableFloatStateOf(0f) }
     var jellyTarget by remember { mutableFloatStateOf(0f) }
     var hasInitializedOffset by remember { mutableStateOf(false) }
     var hoveredTabIndex by remember { mutableIntStateOf(selectedIndex) }
     val dropletOffsetPx = remember { Animatable(0f) }
 
-    val isInteractive = isPressed || isDragging
+    // Trigger droplet inflation ONLY after holding (>150ms) or dragging across the bar
+    LaunchedEffect(isPointerDown) {
+        if (isPointerDown) {
+            delay(HOLD_ACTIVATION_DELAY_MS)
+            if (isPointerDown && !isHoldActivated) {
+                isHoldActivated = true
+                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+        } else {
+            isHoldActivated = false
+        }
+    }
 
-    // Smooth press/drag droplet magnification (1.0f -> 1.22f)
+    val isDropletActive = isHoldActivated || isDragging
+
+    // Smooth magnification (1.0f clean pill -> 1.22f inflated glass droplet)
     val dropletBaseScale by animateFloatAsState(
-        targetValue = if (isInteractive) 1.22f else 1.0f,
+        targetValue = if (isDropletActive) 1.22f else 1.0f,
         animationSpec = spring(
             dampingRatio = 0.58f,
             stiffness = 380f
@@ -250,14 +263,14 @@ private fun InteractiveLiquidTabBarContent(
         label = "droplet_press_scale"
     )
 
-    // Smooth intensity blend for lens refraction & specular rim highlight (0f at rest -> 1f active)
-    val interactiveIntensity by animateFloatAsState(
-        targetValue = if (isInteractive) 1f else 0f,
+    // Smooth morph blend between clean frosted pill (0f) and refractive glass droplet (1f)
+    val dropletProgress by animateFloatAsState(
+        targetValue = if (isDropletActive) 1f else 0f,
         animationSpec = spring(
-            dampingRatio = 0.72f,
+            dampingRatio = 0.68f,
             stiffness = 400f
         ),
-        label = "droplet_interactive_intensity"
+        label = "droplet_morph_progress"
     )
 
     // Jelly horizontal stretch / vertical squash driven by drag velocity
@@ -280,13 +293,28 @@ private fun InteractiveLiquidTabBarContent(
         val totalWidthPx = with(density) { maxWidth.toPx() }.coerceAtLeast(1f)
         val maxOffsetPx = (tabWidthPx * (tabs.size - 1)).coerceAtLeast(0f)
 
-        // Sync droplet position when currentTab or layout width changes externally (or on initial layout)
-        LaunchedEffect(selectedIndex, tabWidthPx) {
+        // When hold threshold triggers (>150ms), smoothly bring droplet directly under finger
+        LaunchedEffect(isHoldActivated) {
+            if (isHoldActivated && !isDragging) {
+                val logicalX = if (isRtl) totalWidthPx - latestTouchX else latestTouchX
+                val targetPx = (logicalX - tabWidthPx / 2f).coerceIn(0f, maxOffsetPx)
+                dropletOffsetPx.animateTo(
+                    targetValue = targetPx,
+                    animationSpec = spring(
+                        dampingRatio = 0.65f,
+                        stiffness = 400f
+                    )
+                )
+            }
+        }
+
+        // Sync clean frosted pill position on initial layout, external tab selection, or hold release
+        LaunchedEffect(selectedIndex, tabWidthPx, isPointerDown, isDragging) {
             val targetPx = (selectedIndex * tabWidthPx).coerceIn(0f, maxOffsetPx)
             if (!hasInitializedOffset) {
                 dropletOffsetPx.snapTo(targetPx)
                 hasInitializedOffset = true
-            } else if (!isDragging) {
+            } else if (!isDragging && !isPointerDown) {
                 dropletOffsetPx.animateTo(
                     targetValue = targetPx,
                     animationSpec = spring(
@@ -295,7 +323,9 @@ private fun InteractiveLiquidTabBarContent(
                     )
                 )
             }
-            hoveredTabIndex = selectedIndex
+            if (!isDragging) {
+                hoveredTabIndex = selectedIndex
+            }
         }
 
         val activeVisualIndex = if (isDragging) hoveredTabIndex else selectedIndex
@@ -304,22 +334,26 @@ private fun InteractiveLiquidTabBarContent(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                // Press detector using Initial pass so child tab clicks continue working seamlessly
+                // Hold detector (>150ms) using Initial pass so quick taps stay clean and unconsumed
                 .pointerInput(tabs.size, isRtl) {
                     awaitEachGesture {
-                        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-                        isPressed = true
-                        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        val down = awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+                        latestTouchX = down.position.x
+                        isPointerDown = true
                         do {
                             val event = awaitPointerEvent(PointerEventPass.Initial)
+                            val primary = event.changes.firstOrNull { it.id == down.id } ?: event.changes.firstOrNull()
+                            if (primary != null) {
+                                latestTouchX = primary.position.x
+                            }
                         } while (event.changes.any { it.pressed })
-                        isPressed = false
+                        isPointerDown = false
                         if (!isDragging) {
                             jellyTarget = 0f
                         }
                     }
                 }
-                // Horizontal drag tracking + velocity-based jelly physics + nearest-tab spring snap
+                // Horizontal drag tracking directly under user's finger (`change.position.x`) + jelly physics
                 .pointerInput(tabs.size, tabWidthPx, totalWidthPx, isRtl) {
                     val velocityTracker = VelocityTracker()
                     var lastHapticStep = latestSelectedIndex
@@ -327,6 +361,7 @@ private fun InteractiveLiquidTabBarContent(
                     detectHorizontalDragGestures(
                         onDragStart = { startOffset ->
                             isDragging = true
+                            latestTouchX = startOffset.x
                             velocityTracker.resetTracking()
                             val logicalX = if (isRtl) totalWidthPx - startOffset.x else startOffset.x
                             val startTargetPx = (logicalX - tabWidthPx / 2f).coerceIn(0f, maxOffsetPx)
@@ -339,14 +374,16 @@ private fun InteractiveLiquidTabBarContent(
                         },
                         onHorizontalDrag = { change, dragAmount ->
                             change.consume()
+                            latestTouchX = change.position.x
                             velocityTracker.addPosition(change.uptimeMillis, change.position)
 
-                            val logicalDelta = if (isRtl) -dragAmount else dragAmount
-                            val nextOffset = (dropletOffsetPx.value + logicalDelta).coerceIn(0f, maxOffsetPx)
+                            val logicalX = if (isRtl) totalWidthPx - change.position.x else change.position.x
+                            val nextOffset = (logicalX - tabWidthPx / 2f).coerceIn(0f, maxOffsetPx)
                             coroutineScope.launch {
                                 dropletOffsetPx.snapTo(nextOffset)
                             }
 
+                            val logicalDelta = if (isRtl) -dragAmount else dragAmount
                             val dragSpeed = abs(logicalDelta) / 22f
                             jellyTarget = dragSpeed.coerceIn(0f, 0.24f)
 
@@ -368,7 +405,8 @@ private fun InteractiveLiquidTabBarContent(
                                 .coerceIn(0, tabs.lastIndex)
 
                             isDragging = false
-                            isPressed = false
+                            isHoldActivated = false
+                            isPointerDown = false
                             jellyTarget = 0f
                             hoveredTabIndex = nearestIndex
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -387,7 +425,8 @@ private fun InteractiveLiquidTabBarContent(
                         onDragCancel = {
                             velocityTracker.resetTracking()
                             isDragging = false
-                            isPressed = false
+                            isHoldActivated = false
+                            isPointerDown = false
                             jellyTarget = 0f
                             val fallbackIndex = latestSelectedIndex
                             hoveredTabIndex = fallbackIndex
@@ -404,21 +443,23 @@ private fun InteractiveLiquidTabBarContent(
                     )
                 }
         ) {
-            // Layer 1: Moving Liquid Glass Droplet sitting BEHIND the tab items (no blur on droplet)
-            val dropletSpecularRim = remember(isDarkTheme, interactiveIntensity) {
-                val boost = 0.25f * interactiveIntensity
+            // Layer 1: Active tab indicator BEHIND tab items
+            // - Idle / Quick Tap: clean subtle frosted pill (no lens magnification)
+            // - Hold (>150ms) / Drag: frosted refractive Liquid Glass Droplet (blur(18.dp) + lens)
+            val dropletSpecularRim = remember(isDarkTheme, dropletProgress) {
+                val boost = 0.25f * dropletProgress
                 Brush.linearGradient(
                     colors = if (isDarkTheme) {
                         listOf(
                             Color.White.copy(alpha = (0.58f + boost).coerceAtMost(0.95f)),
-                            Color.White.copy(alpha = 0.12f),
-                            Color.White.copy(alpha = (0.34f + boost * 0.5f).coerceAtMost(0.75f))
+                            Color.White.copy(alpha = 0.14f),
+                            Color.White.copy(alpha = (0.36f + boost * 0.5f).coerceAtMost(0.78f))
                         )
                     } else {
                         listOf(
-                            Color.White.copy(alpha = (0.85f + boost * 0.5f).coerceAtMost(1f)),
-                            Color.White.copy(alpha = 0.28f),
-                            Color.White.copy(alpha = (0.60f + boost * 0.5f).coerceAtMost(0.95f))
+                            Color.White.copy(alpha = (0.88f + boost * 0.4f).coerceAtMost(1f)),
+                            Color.White.copy(alpha = 0.30f),
+                            Color.White.copy(alpha = (0.64f + boost * 0.4f).coerceAtMost(0.95f))
                         )
                     }
                 )
@@ -427,7 +468,7 @@ private fun InteractiveLiquidTabBarContent(
             val dropletScaleX = dropletBaseScale * (1f + jellyStretch)
             val dropletScaleY = dropletBaseScale * (1f - jellyStretch * 0.45f)
 
-            val dropletBaseModifier = Modifier
+            val indicatorModifier = Modifier
                 .offset { IntOffset(x = dropletOffsetPx.value.roundToInt(), y = 0) }
                 .width(tabWidth)
                 .fillMaxHeight()
@@ -438,65 +479,73 @@ private fun InteractiveLiquidTabBarContent(
                 }
                 .testTag("liquid_glass_droplet")
 
-            if (outerBackdrop != null) {
-                val surfaceTint = if (isDarkTheme) {
-                    Color.White.copy(alpha = 0.12f + 0.08f * interactiveIntensity)
+            if (outerBackdrop != null && dropletProgress > 0.02f) {
+                // Drag / Hold State: Frosted refractive Liquid Glass Droplet behind crisp tab items
+                val dropletTint = if (isDarkTheme) {
+                    Color.White.copy(alpha = 0.12f * dropletProgress)
                 } else {
-                    Color.White.copy(alpha = 0.22f + 0.10f * interactiveIntensity)
+                    Color.White.copy(alpha = 0.22f * dropletProgress)
                 }
 
                 Box(
-                    modifier = dropletBaseModifier
+                    modifier = indicatorModifier
                         .shadow(
-                            elevation = (4f + 6f * interactiveIntensity).dp,
+                            elevation = (4f + 6f * dropletProgress).dp,
                             shape = DropletShape,
-                            ambientColor = Color.Black.copy(alpha = 0.14f),
-                            spotColor = Color.Black.copy(alpha = 0.14f)
+                            ambientColor = Color.Black.copy(alpha = 0.16f),
+                            spotColor = Color.Black.copy(alpha = 0.16f)
                         )
                         .drawBackdrop(
                             backdrop = outerBackdrop,
                             shape = { DropletShape },
                             effects = {
                                 vibrancy()
+                                blur(18f.dp.toPx())
                                 lens(
-                                    refractionHeight = (10f + 6f * interactiveIntensity).dp.toPx(),
-                                    refractionAmount = (14f + 12f * interactiveIntensity).dp.toPx(),
+                                    refractionHeight = (10f + 6f * dropletProgress).dp.toPx(),
+                                    refractionAmount = (14f + 12f * dropletProgress).dp.toPx(),
                                     chromaticAberration = true
                                 )
                             },
                             onDrawSurface = {
-                                drawRect(surfaceTint)
+                                drawRect(dropletTint)
                             }
                         )
                         .border(
-                            width = (1f + 0.4f * interactiveIntensity).dp,
+                            width = (1.1f + 0.3f * dropletProgress).dp,
                             brush = dropletSpecularRim,
                             shape = DropletShape
                         )
                 )
             } else {
-                // Graceful fallback droplet for API < 33 devices
-                val fallbackFill = if (isDarkTheme) {
-                    Color.White.copy(alpha = 0.14f + 0.06f * interactiveIntensity)
+                // Resting / Quick Tap State (and API < 33 fallback): Clean subtle frosted pill
+                val pillFill = if (isDarkTheme) {
+                    Color.White.copy(alpha = 0.14f)
                 } else {
-                    MaterialTheme.colorScheme.primary.copy(alpha = 0.12f + 0.06f * interactiveIntensity)
+                    Color.Black.copy(alpha = 0.08f)
                 }
+                val pillBorder = if (isDarkTheme) {
+                    Color.White.copy(alpha = 0.18f)
+                } else {
+                    Color.Black.copy(alpha = 0.06f)
+                }
+
                 Box(
-                    modifier = dropletBaseModifier
+                    modifier = indicatorModifier
                         .graphicsLayer {
                             clip = true
                             shape = DropletShape
                         }
-                        .background(fallbackFill, DropletShape)
+                        .background(pillFill, DropletShape)
                         .border(
-                            width = (0.9f + 0.4f * interactiveIntensity).dp,
-                            brush = dropletSpecularRim,
+                            width = 0.75.dp,
+                            color = pillBorder,
                             shape = DropletShape
                         )
                 )
             }
 
-            // Layer 2: Crisp tab icons and labels sitting cleanly ON TOP of the droplet
+            // Layer 2: Crisp tab icons and labels sitting cleanly ON TOP of the indicator
             Row(
                 modifier = Modifier.fillMaxSize(),
                 horizontalArrangement = Arrangement.SpaceEvenly,
