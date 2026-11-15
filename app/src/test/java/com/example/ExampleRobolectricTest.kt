@@ -1,10 +1,20 @@
 package com.example
 
 import android.content.Context
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.test.core.app.ApplicationProvider
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import org.junit.Assert.assertEquals
 import org.junit.Test
 import org.junit.runner.RunWith
+import org.robolectric.Robolectric
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
@@ -692,5 +702,46 @@ class ExampleRobolectricTest {
 
     assertEquals("SIZE", com.example.ui.i18n.LocalizedStrings.get("detail_size", com.example.ui.i18n.AppLanguage.ENGLISH))
     assertEquals("قەبارە", com.example.ui.i18n.LocalizedStrings.get("detail_size", com.example.ui.i18n.AppLanguage.KURDISH_SORANI))
+  }
+
+  @Test
+  fun `cupertino floating tab bar renders cleanly with backdrop and fallback modes`() {
+    val selectedTabs = mutableListOf<MainTab>()
+    Robolectric.buildActivity(ComponentActivity::class.java).use { controller ->
+      val activity = controller.setup().get()
+      activity.setContent {
+        val bg = Color(0xFFF2F2F7)
+        val backdrop = rememberLayerBackdrop {
+          drawRect(bg)
+          drawContent()
+        }
+        Box(modifier = Modifier.fillMaxSize()) {
+          Box(
+            modifier = Modifier
+              .fillMaxSize()
+              .background(bg)
+              .layerBackdrop(backdrop)
+          )
+          com.example.ui.components.CupertinoFloatingTabBar(
+            currentTab = MainTab.TODAY,
+            onTabSelected = { selectedTabs.add(it) },
+            currentLanguage = com.example.ui.i18n.AppLanguage.ENGLISH,
+            isDarkTheme = false,
+            activeDownloadsCount = 2,
+            backdrop = backdrop
+          )
+          com.example.ui.components.CupertinoFloatingTabBar(
+            currentTab = MainTab.SETTINGS,
+            onTabSelected = { selectedTabs.add(it) },
+            currentLanguage = com.example.ui.i18n.AppLanguage.KURDISH_SORANI,
+            isDarkTheme = true,
+            activeDownloadsCount = 0,
+            backdrop = null
+          )
+        }
+      }
+      assertEquals(4, MainTab.entries.size)
+      assertEquals(true, selectedTabs.isEmpty())
+    }
   }
 }

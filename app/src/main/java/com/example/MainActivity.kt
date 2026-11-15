@@ -104,6 +104,8 @@ import com.example.util.NetworkMonitor
 import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
+import com.kyant.backdrop.backdrops.layerBackdrop
+import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.launch
 
 /**
@@ -298,116 +300,38 @@ fun MainAppContent(
                 onNavigateBack = { showAdminPanel = false }
             )
         } else {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.background)
-            ) {
-            // Particle Canvas FX - completely unmounted when disabled or OFF, paused during scrolls
-            if (particlesEnabled && particleDensity != com.example.ui.components.ParticleDensity.OFF) {
-                ParticleCanvas(
-                    enabled = true,
-                    isPaused = isListScrolling,
-                    density = particleDensity,
-                    accentColor = themePreset.primaryColor
-                )
+            val backgroundColor = MaterialTheme.colorScheme.background
+            val backdrop = rememberLayerBackdrop {
+                drawRect(backgroundColor)
+                drawContent()
             }
 
-            Scaffold(
-                containerColor = Color.Transparent,
-                modifier = Modifier.fillMaxSize(),
-                bottomBar = {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .navigationBarsPadding()
-                    ) {
-                        // Active Download Mini-Banner
-                        if (activeDownloads.isNotEmpty() && currentTab != MainTab.DOWNLOADS) {
-                            val active = activeDownloads.first()
-                            Surface(
-                                shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(horizontal = 12.dp)
-                                    .height(56.dp)
-                                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                                    .clickable { settingsViewModel.setTab(MainTab.DOWNLOADS) }
-                            ) {
-                                Column(
-                                    modifier = Modifier
-                                        .fillMaxSize()
-                                        .padding(horizontal = 14.dp, vertical = 8.dp),
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Row(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Row(
-                                            modifier = Modifier.weight(1f),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Download,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(16.dp)
-                                            )
-                                            Spacer(modifier = Modifier.width(6.dp))
-                                            Text(
-                                                text = "${LocalizedStrings.get("downloads_active_section", currentLanguage)}: ${active.appName} (${(active.progress * 100).toInt()}%)",
-                                                style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Text(
-                                            text = LocalizedStrings.get("downloads_action_view", currentLanguage),
-                                            style = MaterialTheme.typography.labelSmall.copy(
-                                                color = MaterialTheme.colorScheme.primary,
-                                                fontWeight = FontWeight.Bold
-                                            ),
-                                            maxLines = 1,
-                                            softWrap = false
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(6.dp))
-                                    LinearProgressIndicator(
-                                        progress = { active.progress },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .height(4.dp)
-                                            .clip(RoundedCornerShape(2.dp)),
-                                        color = MaterialTheme.colorScheme.primary,
-                                        trackColor = MaterialTheme.colorScheme.surface
-                                    )
-                                }
-                            }
-                        }
-
-                        // Authentic Apple iOS Floating Glass Tab Bar
-                        CupertinoFloatingTabBar(
-                            currentTab = currentTab,
-                            onTabSelected = { settingsViewModel.setTab(it) },
-                            currentLanguage = currentLanguage,
-                            isDarkTheme = isDarkTheme,
-                            activeDownloadsCount = activeDownloads.size
-                        )
-                    }
-                }
-            ) { paddingValues ->
+            Box(
+                modifier = Modifier.fillMaxSize()
+            ) {
+                // Capture ONLY the background + main screen content layer for the floating Liquid Glass tab bar
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(paddingValues)
-                        .statusBarsPadding()
+                        .background(backgroundColor)
+                        .layerBackdrop(backdrop)
                 ) {
-                    when (currentTab) {
+                    // Particle Canvas FX - completely unmounted when disabled or OFF, paused during scrolls
+                    if (particlesEnabled && particleDensity != com.example.ui.components.ParticleDensity.OFF) {
+                        ParticleCanvas(
+                            enabled = true,
+                            isPaused = isListScrolling,
+                            density = particleDensity,
+                            accentColor = themePreset.primaryColor
+                        )
+                    }
+
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .statusBarsPadding()
+                    ) {
+                        when (currentTab) {
                         MainTab.TODAY -> TodayNewsScreen(
                             newsList = newsList,
                             isRefreshing = isNewsRefreshing,
@@ -664,9 +588,96 @@ fun MainAppContent(
                         }
                     }
                 }
-            }
+                }
 
-            // App Detail iOS Modal Bottom Sheet
+                // Floating Download Mini-Banner + Liquid Glass Tab Bar overlaid on top of layerBackdrop
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .zIndex(5f)
+                ) {
+                    // Active Download Mini-Banner
+                    if (activeDownloads.isNotEmpty() && currentTab != MainTab.DOWNLOADS) {
+                        val active = activeDownloads.first()
+                        Surface(
+                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp)
+                                .height(56.dp)
+                                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+                                .clickable { settingsViewModel.setTab(MainTab.DOWNLOADS) }
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 14.dp, vertical = 8.dp),
+                                verticalArrangement = Arrangement.Center
+                            ) {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(
+                                        modifier = Modifier.weight(1f),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Download,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "${LocalizedStrings.get("downloads_active_section", currentLanguage)}: ${active.appName} (${(active.progress * 100).toInt()}%)",
+                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.weight(1f)
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(10.dp))
+                                    Text(
+                                        text = LocalizedStrings.get("downloads_action_view", currentLanguage),
+                                        style = MaterialTheme.typography.labelSmall.copy(
+                                            color = MaterialTheme.colorScheme.primary,
+                                            fontWeight = FontWeight.Bold
+                                        ),
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(6.dp))
+                                LinearProgressIndicator(
+                                    progress = { active.progress },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(4.dp)
+                                        .clip(RoundedCornerShape(2.dp)),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    trackColor = MaterialTheme.colorScheme.surface
+                                )
+                            }
+                        }
+                    }
+
+                    // Authentic Apple iOS Floating Liquid Glass Tab Bar
+                    CupertinoFloatingTabBar(
+                        currentTab = currentTab,
+                        onTabSelected = { settingsViewModel.setTab(it) },
+                        currentLanguage = currentLanguage,
+                        isDarkTheme = isDarkTheme,
+                        activeDownloadsCount = activeDownloads.size,
+                        backdrop = backdrop
+                    )
+                }
+
+                // App Detail iOS Modal Bottom Sheet
             if (selectedAppForDetail != null) {
                 val detailApp = selectedAppForDetail!!
                 val detailTask = downloadTasks.find { it.appId == detailApp.id }
