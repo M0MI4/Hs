@@ -121,15 +121,15 @@ fun CupertinoFloatingTabBar(
         Brush.linearGradient(
             colors = if (isDarkTheme) {
                 listOf(
-                    Color.White.copy(alpha = 0.34f),
-                    Color.White.copy(alpha = 0.08f),
-                    Color.White.copy(alpha = 0.22f)
+                    Color.White.copy(alpha = 0.42f),
+                    Color.Transparent,
+                    Color.White.copy(alpha = 0.14f)
                 )
             } else {
                 listOf(
-                    Color.White.copy(alpha = 0.90f),
-                    Color.White.copy(alpha = 0.35f),
-                    Color.White.copy(alpha = 0.70f)
+                    Color.White.copy(alpha = 0.88f),
+                    Color.White.copy(alpha = 0.16f),
+                    Color.White.copy(alpha = 0.55f)
                 )
             }
         )
@@ -143,9 +143,9 @@ fun CupertinoFloatingTabBar(
 
     if (useLiquidGlass && backdrop != null) {
         val frostedTintColor = if (isDarkTheme) {
-            Color(0xFF141824).copy(alpha = 0.72f)
+            Color(0xFF0A0D14).copy(alpha = 0.38f)
         } else {
-            Color.White.copy(alpha = 0.78f)
+            Color.White.copy(alpha = 0.58f)
         }
 
         Box(
@@ -161,13 +161,13 @@ fun CupertinoFloatingTabBar(
                     shape = { TabBarShape },
                     effects = {
                         vibrancy()
-                        blur(24f.dp.toPx())
+                        blur(20f.dp.toPx())
                     },
                     onDrawSurface = {
                         drawRect(frostedTintColor)
                     }
                 )
-                .border(1.dp, specularBorderBrush, TabBarShape)
+                .border(0.8.dp, specularBorderBrush, TabBarShape)
         ) {
             InteractiveLiquidTabBarContent(
                 currentTab = currentTab,
@@ -518,16 +518,28 @@ private fun InteractiveLiquidTabBarContent(
                         )
                 )
             } else {
-                // Resting / Quick Tap State (and API < 33 fallback): Clean subtle frosted pill
+                // Resting / Quick Tap State (and API < 33 fallback): Sleek clear dark glass pill
                 val pillFill = if (isDarkTheme) {
-                    Color.White.copy(alpha = 0.14f)
+                    Color.White.copy(alpha = 0.05f)
                 } else {
-                    Color.Black.copy(alpha = 0.08f)
+                    Color.Black.copy(alpha = 0.04f)
                 }
-                val pillBorder = if (isDarkTheme) {
-                    Color.White.copy(alpha = 0.18f)
-                } else {
-                    Color.Black.copy(alpha = 0.06f)
+                val pillSpecularBorder = remember(isDarkTheme) {
+                    Brush.linearGradient(
+                        colors = if (isDarkTheme) {
+                            listOf(
+                                Color.White.copy(alpha = 0.35f),
+                                Color.White.copy(alpha = 0.14f),
+                                Color.White.copy(alpha = 0.08f)
+                            )
+                        } else {
+                            listOf(
+                                Color.White.copy(alpha = 0.85f),
+                                Color.Black.copy(alpha = 0.06f),
+                                Color.Black.copy(alpha = 0.10f)
+                            )
+                        }
+                    )
                 }
 
                 Box(
@@ -538,8 +550,8 @@ private fun InteractiveLiquidTabBarContent(
                         }
                         .background(pillFill, DropletShape)
                         .border(
-                            width = 0.75.dp,
-                            color = pillBorder,
+                            width = 1.dp,
+                            brush = pillSpecularBorder,
                             shape = DropletShape
                         )
                 )
