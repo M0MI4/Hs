@@ -9,6 +9,12 @@ import org.json.JSONObject
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
+data class IconSearchResult(
+    val trackName: String,
+    val artistName: String,
+    val artworkUrl512: String
+)
+
 object IconFetcher {
 
     private val client: OkHttpClient by lazy {
@@ -95,32 +101,83 @@ object IconFetcher {
         return appName.trim()
     }
 
+    private fun upgradeArtworkUrlTo512(item: JSONObject): String? {
+        val url512 = item.optString("artworkUrl512").trim()
+        if (url512.startsWith("http")) {
+            return url512
+        }
+        val url100 = item.optString("artworkUrl100").trim()
+        if (url100.startsWith("http")) {
+            return url100.replace(Regex("\\d+x\\d+bb(\\.[a-zA-Z0-9]+)?$"), "512x512bb.jpg")
+        }
+        val url60 = item.optString("artworkUrl60").trim()
+        if (url60.startsWith("http")) {
+            return url60.replace(Regex("\\d+x\\d+bb(\\.[a-zA-Z0-9]+)?$"), "512x512bb.jpg")
+        }
+        return null
+    }
+
     /**
-     * Parses iTunes Search API JSON and returns a 512x512 icon URL.
+     * Parses iTunes Search API JSON and returns up to 15 512x512 icon results.
      */
-    fun extractItunesArtwork512Url(jsonBody: String): String? {
+    fun parseItunesSearchResults(jsonBody: String): List<IconSearchResult> {
         return try {
             val root = JSONObject(jsonBody)
-            val results = root.optJSONArray("results") ?: return null
-            if (results.length() == 0) return null
-            val first = results.getJSONObject(0)
-            val url512 = first.optString("artworkUrl512").trim()
-            if (url512.startsWith("http")) {
-                return url512
+            val results = root.optJSONArray("results") ?: return emptyList()
+            val list = ArrayList<IconSearchResult>(results.length().coerceAtMost(15))
+            for (i in 0 until results.length().coerceAtMost(15)) {
+                val obj = results.optJSONObject(i) ?: continue
+                val artwork512 = upgradeArtworkUrlTo512(obj) ?: continue
+                val trackName = obj.optString("trackName").trim()
+                val artistName = obj.optString("artistName").trim()
+                list.add(
+                    IconSearchResult(
+                        trackName = trackName.ifBlank { "App Icon" },
+                        artistName = artistName,
+                        artworkUrl512 = artwork512
+                    )
+                )
             }
-            val url100 = first.optString("artworkUrl100").trim()
-            if (url100.startsWith("http")) {
-                return url100.replace(Regex("\\d+x\\d+bb(\\.[a-zA-Z0-9]+)?$"), "512x512bb.jpg")
-            }
-            val url60 = first.optString("artworkUrl60").trim()
-            if (url60.startsWith("http")) {
-                return url60.replace(Regex("\\d+x\\d+bb(\\.[a-zA-Z0-9]+)?$"), "512x512bb.jpg")
-            }
-            null
+            list
         } catch (e: Exception) {
-            Log.w("IconFetcher", "Failed to parse iTunes JSON: ${e.message}")
-            null
+            Log.w("IconFetcher", "Failed to parse iTunes search results: ${e.message}")
+            emptyList()
         }
+    }
+
+    /**
+     * Parses iTunes Search API JSON and returns the first 512x512 icon URL.
+     */
+    fun extractItunesArtwork512Url(jsonBody: String): String? {
+        return parseItunesSearchResults(jsonBody).firstOrNull()?.artworkUrl512
+    }
+
+    /**
+     * Queries iTunes Search API for up to 15 matching software icons (512x512).
+     */
+    suspend fun searchIcons(query: String): List<IconSearchResult> = withContext(Dispatchers.IO) {
+        val cleanQuery = query.trim()
+        if (cleanQuery.isBlank()) return@withContext emptyList()
+        val encodedTerm = URLEncoder.encode(cleanQuery, "UTF-8")
+        val apiUrl = "https://itunes.apple.com/search?term=$encodedTerm&entity=software&limit=15"
+        try {
+            val request = Request.Builder()
+                .url(apiUrl)
+                .header("Accept", "application/json")
+                .header("User-Agent", "HsStore-Android/1.3")
+                .build()
+            client.newCall(request).execute().use { response ->
+                if (response.isSuccessful) {
+                    val body = response.body?.string()
+                    if (!body.isNullOrBlank()) {
+                        return@withContext parseItunesSearchResults(body)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Log.w("IconFetcher", "searchIcons error for '$cleanQuery': ${e.message}")
+        }
+        emptyList()
     }
 
     /**

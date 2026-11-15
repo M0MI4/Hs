@@ -524,13 +524,14 @@ fun AppDetailSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Real App Stats Bar: Downloads | Version | Size • Category
+            // Real App Stats Bar: Downloads | Version | Size (no Category clutter)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(12.dp))
                     .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f))
-                    .padding(vertical = 10.dp, horizontal = 8.dp),
+                    .padding(vertical = 10.dp, horizontal = 8.dp)
+                    .testTag("detail_stats_row"),
                 horizontalArrangement = Arrangement.SpaceEvenly,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -598,10 +599,10 @@ fun AppDetailSheet(
 
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
-                    modifier = Modifier.weight(1.25f)
+                    modifier = Modifier.weight(1f)
                 ) {
                     Text(
-                        text = LocalizedStrings.get("detail_size_category", currentLanguage),
+                        text = LocalizedStrings.get("detail_size", currentLanguage),
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 10.sp,
@@ -612,10 +613,9 @@ fun AppDetailSheet(
                     )
                     Spacer(modifier = Modifier.height(2.dp))
                     Text(
-                        text = "${app.sizeDisplay} • ${app.category}",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 13.sp
+                        text = app.sizeDisplay,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold
                         ),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis

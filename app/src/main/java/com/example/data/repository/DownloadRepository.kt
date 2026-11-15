@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import android.util.Log
 import androidx.core.content.FileProvider
+import com.example.R
 import com.example.data.local.AppDatabase
 import com.example.data.local.DownloadTaskDao
 import com.example.data.local.DownloadTaskEntity
@@ -12,6 +13,8 @@ import com.example.data.model.DownloadStatus
 import com.example.data.model.DownloadTask
 import com.example.data.model.ModApp
 import com.example.data.remote.RetrofitClient
+import com.google.firebase.firestore.FieldValue
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -21,20 +24,28 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import okhttp3.ResponseBody
 import retrofit2.Response
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.UUID
+import java.util.concurrent.ConcurrentHashMap
+
+class DownloadJobState(
+    @Volatile var hasCountedDownload: Boolean = false
+)
 
 class DownloadRepository(
     private val context: Context,
-    private val downloadTaskDao: DownloadTaskDao = AppDatabase.getInstance(context).downloadTaskDao()
+    private val downloadTaskDao: DownloadTaskDao = AppDatabase.getInstance(context).downloadTaskDao(),
+    private val onDownloadCompletedCounted: (suspend (String) -> Unit)? = null
 ) {
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private val activeJobs = mutableMapOf<String, Job>()
+    private val activeJobStates = ConcurrentHashMap<String, DownloadJobState>()
 
     private val _tasks = MutableStateFlow<List<DownloadTask>>(emptyList())
     val tasks: StateFlow<List<DownloadTask>> = _tasks.asStateFlow()
@@ -147,6 +158,7 @@ class DownloadRepository(
             expectedSignatureSha256 = app.expectedSignatureSha256
         )
 
+        activeJobStates[taskId] = DownloadJobState(hasCountedDownload = false)
         _tasks.update { current ->
             listOf(newTask) + current.filter { it.appId != app.id && it.id != taskId }
         }
@@ -182,6 +194,7 @@ class DownloadRepository(
     fun cancelDownload(taskId: String) {
         activeJobs[taskId]?.cancel()
         activeJobs.remove(taskId)
+        activeJobStates.remove(taskId)
         val task = _tasks.value.find { it.id == taskId }
         task?.filePath?.let { path ->
             try {
@@ -324,12 +337,15 @@ class DownloadRepository(
                 }
 
                 outputStream.flush()
+                try { outputStream.close() } catch (_: Exception) {}
+                outputStream = null
 
-                if (isActive) {
+                if (isActive && targetFile.exists() && targetFile.length() > 0L) {
+                    val finalSize = targetFile.length()
                     updateTask(task.id, persist = true) {
                         it.copy(
-                            downloadedBytes = totalRead,
-                            totalBytes = totalRead,
+                            downloadedBytes = finalSize,
+                            totalBytes = finalSize,
                             progress = 1.0f,
                             speedBytesPerSec = 0L,
                             status = DownloadStatus.COMPLETED,
@@ -337,6 +353,13 @@ class DownloadRepository(
                             filePath = targetFile.absolutePath
                         )
                     }
+                    incrementDownloadCountOnCompletion(
+                        taskId = task.id,
+                        appId = task.appId,
+                        downloadedFile = targetFile
+                    )
+                } else if (isActive) {
+                    handleFallbackOrFailure(task, targetFile)
                 }
             } catch (e: Exception) {
                 Log.e("DownloadRepo", "Streaming error for ${task.appName}: ${e.message}", e)
@@ -358,6 +381,49 @@ class DownloadRepository(
         }
 
         activeJobs[task.id] = job
+    }
+
+    internal suspend fun incrementDownloadCountOnCompletion(
+        taskId: String,
+        appId: String,
+        downloadedFile: File
+    ): Boolean {
+        if (appId.isBlank() || appId == "app_hsstore_update") return false
+        if (!downloadedFile.exists() || downloadedFile.length() <= 0L) return false
+
+        val jobState = activeJobStates.getOrPut(taskId) { DownloadJobState(hasCountedDownload = false) }
+        val shouldIncrement = synchronized(jobState) {
+            if (jobState.hasCountedDownload) {
+                false
+            } else {
+                jobState.hasCountedDownload = true
+                true
+            }
+        }
+        if (!shouldIncrement) return false
+
+        return try {
+            val customHook = onDownloadCompletedCounted
+            if (customHook != null) {
+                customHook(appId)
+            } else {
+                val firestore = try {
+                    FirebaseFirestore.getInstance(
+                        context.applicationContext.getString(R.string.firestore_database_id)
+                    )
+                } catch (_: Exception) {
+                    FirebaseFirestore.getInstance()
+                }
+                firestore.collection("apps")
+                    .document(appId)
+                    .update("downloadCount", FieldValue.increment(1L))
+                    .await()
+            }
+            true
+        } catch (e: Exception) {
+            Log.w("DownloadRepo", "Non-fatal downloadCount increment error for $appId: ${e.message}")
+            false
+        }
     }
 
     private fun handleFallbackOrFailure(task: DownloadTask, targetFile: File) {

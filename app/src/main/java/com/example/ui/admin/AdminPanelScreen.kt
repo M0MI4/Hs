@@ -16,9 +16,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -27,10 +29,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
@@ -51,6 +58,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Logout
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.NotificationsOff
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.SwapVert
@@ -77,6 +85,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -90,10 +99,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
@@ -821,7 +833,7 @@ private fun AppEditorBottomSheet(
     var glowColorHex by remember(app) { mutableStateOf(app?.glowColorHex ?: "") }
     var expectedSignatureSha256 by remember(app) { mutableStateOf(app?.expectedSignatureSha256 ?: "") }
     var isParsingApk by remember { mutableStateOf(false) }
-    var isFetchingIcon by remember { mutableStateOf(false) }
+    var showIconSearchPicker by remember { mutableStateOf(false) }
     var screenshotsList by remember(app) { mutableStateOf(app?.screenshots ?: emptyList()) }
     var screenshotInputUrl by remember { mutableStateOf("") }
 
@@ -1085,40 +1097,25 @@ private fun AppEditorBottomSheet(
                         )
 
                         Button(
-                            onClick = {
-                                if (name.isBlank() && packageName.isBlank()) {
-                                    Toast.makeText(context, "Enter an app name or package first.", Toast.LENGTH_SHORT).show()
-                                    return@Button
-                                }
-                                isFetchingIcon = true
-                                scope.launch {
-                                    val fetchedUrl = adminViewModel.fetchHdIconForApp(name, packageName, glowColorHex)
-                                    iconUrl = fetchedUrl
-                                    isFetchingIcon = false
-                                    Toast.makeText(context, "512x512 HD icon fetched!", Toast.LENGTH_SHORT).show()
-                                }
-                            },
-                            enabled = !isFetchingIcon,
+                            onClick = { showIconSearchPicker = true },
                             shape = RoundedCornerShape(10.dp),
                             colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 14.dp),
-                            modifier = Modifier.testTag("fetch_hd_icon_btn")
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                            modifier = Modifier.testTag("search_icons_btn")
                         ) {
-                            if (isFetchingIcon) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = Icons.Default.ImageSearch,
-                                    contentDescription = "Fetch HD Icon",
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Fetch HD Icon", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                            }
+                            Icon(
+                                imageVector = Icons.Default.ImageSearch,
+                                contentDescription = "Search Icons",
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Search Icons /\nگەڕان بۆ ئایکۆن",
+                                fontSize = 10.sp,
+                                lineHeight = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center
+                            )
                         }
                     }
                 }
@@ -1472,6 +1469,307 @@ private fun AppEditorBottomSheet(
             }
 
             Spacer(modifier = Modifier.height(16.dp))
+        }
+    }
+
+    if (showIconSearchPicker) {
+        IconSearchPickerBottomSheet(
+            initialQuery = name.trim(),
+            packageName = packageName.trim(),
+            glowColorHex = glowColorHex.trim(),
+            adminViewModel = adminViewModel,
+            onIconSelected = { selectedUrl ->
+                iconUrl = selectedUrl
+                showIconSearchPicker = false
+                Toast.makeText(context, "512x512 HD icon selected!", Toast.LENGTH_SHORT).show()
+            },
+            onDismiss = { showIconSearchPicker = false }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun IconSearchPickerBottomSheet(
+    initialQuery: String,
+    packageName: String,
+    glowColorHex: String,
+    adminViewModel: AdminViewModel,
+    onIconSelected: (String) -> Unit,
+    onDismiss: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var searchQuery by remember(initialQuery) { mutableStateOf(initialQuery) }
+    var isSearching by remember { mutableStateOf(false) }
+    var results by remember { mutableStateOf<List<com.example.util.IconSearchResult>>(emptyList()) }
+    var hasSearched by remember { mutableStateOf(false) }
+
+    fun executeSearch(rawQuery: String) {
+        val trimmed = rawQuery.trim()
+        if (trimmed.isBlank()) {
+            results = emptyList()
+            hasSearched = true
+            return
+        }
+        isSearching = true
+        scope.launch {
+            var found = adminViewModel.searchHdIcons(trimmed)
+            if (found.isEmpty()) {
+                val cleaned = com.example.util.IconFetcher.buildSearchTerm(trimmed, packageName)
+                if (cleaned.isNotBlank() && !cleaned.equals(trimmed, ignoreCase = true)) {
+                    found = adminViewModel.searchHdIcons(cleaned)
+                }
+            }
+            results = found
+            isSearching = false
+            hasSearched = true
+        }
+    }
+
+    LaunchedEffect(initialQuery) {
+        if (initialQuery.isNotBlank()) {
+            executeSearch(initialQuery)
+        }
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+        containerColor = MaterialTheme.colorScheme.surface,
+        modifier = Modifier
+            .navigationBarsPadding()
+            .testTag("icon_search_picker_sheet")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 18.dp, vertical = 8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = "Search Icons / گەڕان بۆ ئایکۆن",
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    )
+                    Text(
+                        text = "Select any 512x512 HD icon from the 15 results below",
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    )
+                }
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Default.Close, contentDescription = "Close")
+                }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    placeholder = { Text("e.g. CapCut, Subway Surfers, Minecraft") },
+                    singleLine = true,
+                    leadingIcon = {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    trailingIcon = {
+                        if (searchQuery.isNotEmpty()) {
+                            IconButton(onClick = { searchQuery = "" }) {
+                                Icon(Icons.Default.Close, contentDescription = "Clear search", modifier = Modifier.size(18.dp))
+                            }
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    keyboardActions = KeyboardActions(onSearch = { executeSearch(searchQuery) }),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .testTag("icon_search_input")
+                )
+
+                Button(
+                    onClick = { executeSearch(searchQuery) },
+                    enabled = !isSearching && searchQuery.isNotBlank(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = iOSSystemBlue),
+                    contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
+                    modifier = Modifier.testTag("icon_search_submit_btn")
+                ) {
+                    Text("Search", fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 240.dp, max = 440.dp)
+            ) {
+                when {
+                    isSearching -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 48.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            CircularProgressIndicator(color = iOSSystemBlue)
+                            Spacer(modifier = Modifier.height(12.dp))
+                            Text(
+                                text = "Searching 512x512 HD icons...",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    results.isEmpty() && hasSearched -> {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 28.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ImageSearch,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(40.dp)
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = "No icons matched \"$searchQuery\". Try another keyword.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                            if (searchQuery.isNotBlank()) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                OutlinedButton(
+                                    onClick = {
+                                        val monogramUrl = com.example.util.IconFetcher.buildHighResMonogramUrl(
+                                            appName = searchQuery,
+                                            accentHex = glowColorHex.ifBlank { "#007AFF" }
+                                        )
+                                        onIconSelected(monogramUrl)
+                                    }
+                                ) {
+                                    Text("Use 512px Monogram Icon")
+                                }
+                            }
+                        }
+                    }
+
+                    results.isEmpty() -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 48.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = "Type an app name and tap Search to browse 15 HD icons.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+
+                    else -> {
+                        LazyVerticalGrid(
+                            columns = GridCells.Fixed(3),
+                            verticalArrangement = Arrangement.spacedBy(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                            contentPadding = PaddingValues(bottom = 16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("icon_search_results_grid")
+                        ) {
+                            items(results) { item ->
+                                Surface(
+                                    shape = RoundedCornerShape(14.dp),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                                    border = BorderStroke(
+                                        0.75.dp,
+                                        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clip(RoundedCornerShape(14.dp))
+                                        .clickable { onIconSelected(item.artworkUrl512) }
+                                ) {
+                                    Column(
+                                        modifier = Modifier.padding(8.dp),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        AsyncImage(
+                                            model = ImageRequest.Builder(context)
+                                                .data(item.artworkUrl512)
+                                                .size(256, 256)
+                                                .allowHardware(true)
+                                                .crossfade(false)
+                                                .build(),
+                                            contentDescription = item.trackName,
+                                            contentScale = ContentScale.Crop,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .aspectRatio(1f)
+                                                .clip(RoundedCornerShape(16.dp))
+                                                .background(MaterialTheme.colorScheme.surface)
+                                        )
+                                        Spacer(modifier = Modifier.height(6.dp))
+                                        Text(
+                                            text = item.trackName,
+                                            style = MaterialTheme.typography.labelSmall.copy(
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface,
+                                                fontSize = 11.sp
+                                            ),
+                                            maxLines = 2,
+                                            overflow = TextOverflow.Ellipsis,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        if (item.artistName.isNotBlank()) {
+                                            Text(
+                                                text = item.artistName,
+                                                style = MaterialTheme.typography.labelSmall.copy(
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    fontSize = 9.sp
+                                                ),
+                                                maxLines = 1,
+                                                overflow = TextOverflow.Ellipsis,
+                                                textAlign = TextAlign.Center
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
         }
     }
 }

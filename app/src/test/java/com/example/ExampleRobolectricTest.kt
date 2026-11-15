@@ -630,4 +630,67 @@ class ExampleRobolectricTest {
     assertEquals("DRAFT", com.example.ui.i18n.LocalizedStrings.get("badge_draft", com.example.ui.i18n.AppLanguage.ENGLISH))
     assertEquals("ڕەشنووس", com.example.ui.i18n.LocalizedStrings.get("badge_draft", com.example.ui.i18n.AppLanguage.KURDISH_SORANI))
   }
+
+  @Test
+  fun `icon fetcher parseItunesSearchResults returns up to 15 results with trackName artistName and 512px artwork`() {
+    val entries = (1..18).joinToString(",") { idx ->
+      if (idx % 2 == 0) {
+        """{"trackName":"App $idx","artistName":"Studio $idx","artworkUrl100":"https://is1-ssl.mzstatic.com/image/thumb/App$idx/100x100bb.jpg"}"""
+      } else {
+        """{"trackName":"App $idx","artistName":"Studio $idx","artworkUrl512":"https://is1-ssl.mzstatic.com/image/thumb/App$idx/512x512bb.jpg"}"""
+      }
+    }
+    val json = """{"resultCount":18,"results":[$entries]}"""
+    val parsed = com.example.util.IconFetcher.parseItunesSearchResults(json)
+
+    assertEquals(15, parsed.size)
+    assertEquals("App 1", parsed[0].trackName)
+    assertEquals("Studio 1", parsed[0].artistName)
+    assertEquals("https://is1-ssl.mzstatic.com/image/thumb/App1/512x512bb.jpg", parsed[0].artworkUrl512)
+
+    assertEquals("App 2", parsed[1].trackName)
+    assertEquals("Studio 2", parsed[1].artistName)
+    assertEquals("https://is1-ssl.mzstatic.com/image/thumb/App2/512x512bb.jpg", parsed[1].artworkUrl512)
+  }
+
+  @Test
+  fun `downloadCount increments strictly once on non-empty completed download and never on click or duplicate actions`() {
+    val app = ApplicationProvider.getApplicationContext<android.app.Application>()
+    val dao = com.example.data.local.AppDatabase.getInstance(app).downloadTaskDao()
+    val countedAppIds = mutableListOf<String>()
+
+    val repo = com.example.data.repository.DownloadRepository(
+      context = app,
+      downloadTaskDao = dao,
+      onDownloadCompletedCounted = { id -> countedAppIds.add(id) }
+    )
+
+    val emptyFile = repo.apkFileForApp("count_empty_test")
+    emptyFile.parentFile?.mkdirs()
+    emptyFile.writeBytes(ByteArray(0))
+
+    val missingFile = repo.apkFileForApp("count_missing_test")
+    if (missingFile.exists()) missingFile.delete()
+
+    val validFile = repo.apkFileForApp("count_valid_test")
+    validFile.writeBytes(ByteArray(128) { 7 })
+
+    kotlinx.coroutines.runBlocking {
+      // Missing or 0-byte files must NEVER increment downloadCount
+      assertEquals(false, repo.incrementDownloadCountOnCompletion("task_missing", "app_missing", missingFile))
+      assertEquals(false, repo.incrementDownloadCountOnCompletion("task_empty", "app_empty", emptyFile))
+      assertEquals(0, countedAppIds.size)
+
+      // Completed non-empty file increments strictly once
+      assertEquals(true, repo.incrementDownloadCountOnCompletion("task_valid", "app_snap_mod", validFile))
+      assertEquals(listOf("app_snap_mod"), countedAppIds)
+
+      // Subsequent calls for same job (resume / install / replace) must NOT increment again
+      assertEquals(false, repo.incrementDownloadCountOnCompletion("task_valid", "app_snap_mod", validFile))
+      assertEquals(listOf("app_snap_mod"), countedAppIds)
+    }
+
+    assertEquals("SIZE", com.example.ui.i18n.LocalizedStrings.get("detail_size", com.example.ui.i18n.AppLanguage.ENGLISH))
+    assertEquals("قەبارە", com.example.ui.i18n.LocalizedStrings.get("detail_size", com.example.ui.i18n.AppLanguage.KURDISH_SORANI))
+  }
 }

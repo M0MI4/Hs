@@ -138,6 +138,7 @@ object LocalizedStrings {
         // App Detail Sheet
         "detail_downloads" to "DOWNLOADS",
         "detail_version" to "VERSION",
+        "detail_size" to "SIZE",
         "detail_size_category" to "SIZE • CATEGORY",
         "detail_preview_screenshots" to "PREVIEW SCREENSHOTS",
         "detail_tab_features" to "Mod Features",
@@ -264,6 +265,7 @@ object LocalizedStrings {
         // App Detail Sheet
         "detail_downloads" to "داونلۆدەکان",
         "detail_version" to "وەشان",
+        "detail_size" to "قەبارە",
         "detail_size_category" to "قەبارە • جۆر",
         "detail_preview_screenshots" to "وێنەکانی پێشبینین",
         "detail_tab_features" to "تایبەتمەندییەکان",

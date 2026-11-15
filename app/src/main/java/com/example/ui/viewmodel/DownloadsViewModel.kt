@@ -42,9 +42,8 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun startDownload(app: ModApp, user: FirebaseUser? = null): String {
         val taskId = downloadRepo.startDownload(app)
-        viewModelScope.launch {
-            firestoreRepo.incrementAppDownloadCount(app.id)
-            if (user != null) {
+        if (user != null) {
+            viewModelScope.launch {
                 try {
                     firestoreRepo.recordDownload(app.id, app.name, app.version)
                 } catch (_: Exception) {}

@@ -328,6 +328,10 @@ class AdminViewModel(
         )
     }
 
+    suspend fun searchHdIcons(query: String): List<com.example.util.IconSearchResult> {
+        return com.example.util.IconFetcher.searchIcons(query)
+    }
+
     fun saveApp(app: ModApp, onComplete: () -> Unit = {}) {
         viewModelScope.launch {
             _adminState.value = _adminState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
