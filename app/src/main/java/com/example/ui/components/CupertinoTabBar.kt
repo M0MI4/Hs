@@ -202,14 +202,14 @@ fun CupertinoFloatingTabBar(
 
     val isDropletLensTarget by remember(selectedIndex) {
         derivedStateOf {
-            isDragging || isHoldActivated || abs(animatedTabIndex.value - selectedIndex) > 0.05f
+            isDragging || isHoldActivated || abs(animatedTabIndex.value - selectedIndex) > 0.28f
         }
     }
 
     val lensIntensity by animateFloatAsState(
         targetValue = if (isDropletLensTarget) 1f else 0f,
         animationSpec = tween(
-            durationMillis = 340,
+            durationMillis = 250,
             easing = FastOutSlowInEasing
         ),
         label = "droplet_lens_intensity"
