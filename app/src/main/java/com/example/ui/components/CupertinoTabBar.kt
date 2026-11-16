@@ -6,6 +6,7 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -59,6 +60,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.PointerEventPass
@@ -197,44 +199,19 @@ fun CupertinoFloatingTabBar(
         }
     }
 
-    val isGlidingOnTap by remember(selectedIndex) {
+    val isDropletLensTarget by remember(selectedIndex) {
         derivedStateOf {
-            !isDragging && !isHoldActivated && abs(animatedTabIndex.value - selectedIndex) > 0.04f
+            isDragging || isHoldActivated || abs(animatedTabIndex.value - selectedIndex) > 0.05f
         }
     }
 
-    val isHoldOrDrag = isHoldActivated || isDragging
-    val effectiveDropletFactor by remember {
-        derivedStateOf {
-            when {
-                isHoldActivated || isDragging -> 1f
-                isGlidingOnTap -> 0.85f
-                else -> 0f
-            }
-        }
-    }
-
-    val dropletBaseScale by animateFloatAsState(
-        targetValue = when {
-            isHoldOrDrag -> 1.22f
-            isGlidingOnTap -> 1.10f
-            else -> 1.0f
-        },
-        animationSpec = spring(
-            dampingRatio = 0.62f,
-            stiffness = 380f
-        ),
-        label = "droplet_press_scale"
+    val lensIntensity by animateFloatAsState(
+        targetValue = if (isDropletLensTarget) 1f else 0f,
+        animationSpec = tween(durationMillis = 220),
+        label = "droplet_lens_intensity"
     )
 
-    val dropletProgress by animateFloatAsState(
-        targetValue = effectiveDropletFactor,
-        animationSpec = spring(
-            dampingRatio = 0.68f,
-            stiffness = 400f
-        ),
-        label = "droplet_morph_progress"
-    )
+    val dropletBaseScale = 1f + 0.12f * lensIntensity
 
     val jellyStretch by animateFloatAsState(
         targetValue = jellyTarget,
@@ -526,35 +503,46 @@ fun CupertinoFloatingTabBar(
             }
 
             // LAYER 2 (Overlaid sibling OUTSIDE tabBarBackdrop — zero recursion):
-            //   - Idle / Quick Tap State: sleek dark-glass pill with 1.dp specular rim
-            //   - Hold (>150ms) / Drag State: true Water-Droplet optical warping + RGB edge dispersion
-            //     over tabBarBackdrop (blur = 0 on droplet; blurred page + crisp icons/labels)
+            //   ONE single invariant indicator Box at all times:
+            //   - Smooth scale = 1f + 0.12f * lensIntensity
+            //   - When lensIntensity < 0.01f (settled on Today/Apps/Downloads/Settings): lens() is skipped
+            //     completely so there is zero optical warping or doubled text at pill edges.
+            //   - When dragging, holding (>150ms), or gliding mid-tap: lens() + vibrancy() + RGB edge
+            //     dispersion smoothly ramp with tween(220).
             Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(horizontal = innerHorizontalPadding, vertical = innerVerticalPadding)
             ) {
-                val dropletSpecularRim = remember(isDarkTheme, dropletProgress) {
-                    val boost = 0.25f * dropletProgress
-                    Brush.linearGradient(
-                        colors = if (isDarkTheme) {
-                            listOf(
-                                Color.White.copy(alpha = (0.58f + boost).coerceAtMost(0.95f)),
-                                Color.White.copy(alpha = 0.14f),
-                                Color.White.copy(alpha = (0.36f + boost * 0.5f).coerceAtMost(0.78f))
+                val indicatorSpecularBorder = remember(isDarkTheme, lensIntensity) {
+                    if (isDarkTheme) {
+                        Brush.linearGradient(
+                            colors = listOf(
+                                lerp(Color.White.copy(alpha = 0.35f), Color.White.copy(alpha = 0.80f), lensIntensity),
+                                lerp(Color.White.copy(alpha = 0.14f), Color.White.copy(alpha = 0.16f), lensIntensity),
+                                lerp(Color.White.copy(alpha = 0.08f), Color.White.copy(alpha = 0.48f), lensIntensity)
                             )
-                        } else {
-                            listOf(
-                                Color.White.copy(alpha = (0.88f + boost * 0.4f).coerceAtMost(1f)),
-                                Color.White.copy(alpha = 0.30f),
-                                Color.White.copy(alpha = (0.64f + boost * 0.4f).coerceAtMost(0.95f))
+                        )
+                    } else {
+                        Brush.linearGradient(
+                            colors = listOf(
+                                lerp(Color.White.copy(alpha = 0.85f), Color.White.copy(alpha = 0.96f), lensIntensity),
+                                lerp(Color.Black.copy(alpha = 0.06f), Color.White.copy(alpha = 0.28f), lensIntensity),
+                                lerp(Color.Black.copy(alpha = 0.10f), Color.White.copy(alpha = 0.72f), lensIntensity)
                             )
-                        }
-                    )
+                        )
+                    }
                 }
 
-                val dropletScaleX = dropletBaseScale * (1f + jellyStretch)
-                val dropletScaleY = dropletBaseScale * (1f - jellyStretch * 0.45f)
+                val surfaceFill = if (isDarkTheme) {
+                    lerp(Color.White.copy(alpha = 0.05f), Color.White.copy(alpha = 0.04f), lensIntensity)
+                } else {
+                    lerp(Color.Black.copy(alpha = 0.04f), Color.White.copy(alpha = 0.08f), lensIntensity)
+                }
+
+                val dropletScaleX = dropletBaseScale * (1f + jellyStretch * lensIntensity)
+                val dropletScaleY = dropletBaseScale * (1f - jellyStretch * 0.45f * lensIntensity)
+                val dropletShadowPx = with(density) { (8f * lensIntensity).dp.toPx() }
 
                 val indicatorModifier = Modifier
                     .offset {
@@ -569,85 +557,56 @@ fun CupertinoFloatingTabBar(
                     .graphicsLayer {
                         scaleX = dropletScaleX
                         scaleY = dropletScaleY
+                        shadowElevation = dropletShadowPx
+                        shape = DropletShape
+                        clip = false
+                        ambientShadowColor = Color.Black.copy(alpha = 0.18f)
+                        spotShadowColor = Color.Black.copy(alpha = 0.18f)
                     }
                     .testTag("liquid_glass_droplet")
 
-                val pillFill = if (isDarkTheme) {
-                    Color.White.copy(alpha = 0.05f)
+                if (tabBarBackdrop != null) {
+                    Box(
+                        modifier = indicatorModifier
+                            .drawBackdrop(
+                                backdrop = tabBarBackdrop,
+                                shape = { DropletShape },
+                                effects = {
+                                    if (lensIntensity >= 0.01f) {
+                                        vibrancy()
+                                        lens(
+                                            refractionHeight = 14f.dp.toPx() * lensIntensity,
+                                            refractionAmount = 24f.dp.toPx() * lensIntensity,
+                                            depthEffect = true,
+                                            chromaticAberration = true
+                                        )
+                                    }
+                                },
+                                onDrawSurface = {
+                                    drawRect(surfaceFill)
+                                }
+                            )
+                            .border(
+                                width = (1f + 0.35f * lensIntensity).dp,
+                                brush = indicatorSpecularBorder,
+                                shape = DropletShape
+                            )
+                    )
                 } else {
-                    Color.Black.copy(alpha = 0.04f)
-                }
-                val pillSpecularBorder = remember(isDarkTheme) {
-                    Brush.linearGradient(
-                        colors = if (isDarkTheme) {
-                            listOf(
-                                Color.White.copy(alpha = 0.35f),
-                                Color.White.copy(alpha = 0.14f),
-                                Color.White.copy(alpha = 0.08f)
+                    Box(
+                        modifier = indicatorModifier
+                            .graphicsLayer {
+                                clip = true
+                                shape = DropletShape
+                            }
+                            .background(surfaceFill, DropletShape)
+                            .border(
+                                width = 1.dp,
+                                brush = indicatorSpecularBorder,
+                                shape = DropletShape
                             )
-                        } else {
-                            listOf(
-                                Color.White.copy(alpha = 0.85f),
-                                Color.Black.copy(alpha = 0.06f),
-                                Color.Black.copy(alpha = 0.10f)
-                            )
-                        }
                     )
                 }
-
-                val useDropletLens = tabBarBackdrop != null && (dropletProgress > 0.02f || isGlidingOnTap)
-                val activeRefractionProgress = dropletProgress.coerceAtLeast(if (isGlidingOnTap) 0.75f else 0f)
-
-                val dropletVisualModifier = if (useDropletLens && tabBarBackdrop != null) {
-                    val dropletTint = if (isDarkTheme) {
-                        Color.White.copy(alpha = 0.04f * activeRefractionProgress)
-                    } else {
-                        Color.White.copy(alpha = 0.08f * activeRefractionProgress)
-                    }
-                    Modifier
-                        .shadow(
-                            elevation = (6f + 6f * activeRefractionProgress).dp,
-                            shape = DropletShape,
-                            ambientColor = Color.Black.copy(alpha = 0.18f),
-                            spotColor = Color.Black.copy(alpha = 0.18f)
-                        )
-                        .drawBackdrop(
-                            backdrop = tabBarBackdrop,
-                            shape = { DropletShape },
-                            effects = {
-                                vibrancy()
-                                lens(
-                                    refractionHeight = (6f + 8f * activeRefractionProgress).dp.toPx(),
-                                    refractionAmount = (10f + 14f * activeRefractionProgress).dp.toPx(),
-                                    depthEffect = true,
-                                    chromaticAberration = true
-                                )
-                            },
-                            onDrawSurface = {
-                                drawRect(dropletTint)
-                            }
-                        )
-                        .border(
-                            width = (1.05f + 0.35f * activeRefractionProgress).dp,
-                            brush = dropletSpecularRim,
-                            shape = DropletShape
-                        )
-                } else {
-                    Modifier
-                        .graphicsLayer {
-                            clip = true
-                            shape = DropletShape
-                        }
-                        .background(pillFill, DropletShape)
-                        .border(
-                            width = 1.dp,
-                            brush = pillSpecularBorder,
-                            shape = DropletShape
-                        )
-                }
-
-                // Single shared indicator Box gliding seamlessly across the entire bar
-                Box(modifier = indicatorModifier.then(dropletVisualModifier))
             }
         }
     }
