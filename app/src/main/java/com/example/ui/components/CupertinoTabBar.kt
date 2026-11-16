@@ -3,6 +3,7 @@ package com.example.ui.components
 import android.os.Build
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -207,7 +208,10 @@ fun CupertinoFloatingTabBar(
 
     val lensIntensity by animateFloatAsState(
         targetValue = if (isDropletLensTarget) 1f else 0f,
-        animationSpec = tween(durationMillis = 220),
+        animationSpec = tween(
+            durationMillis = 340,
+            easing = FastOutSlowInEasing
+        ),
         label = "droplet_lens_intensity"
     )
 
@@ -505,10 +509,9 @@ fun CupertinoFloatingTabBar(
             // LAYER 2 (Overlaid sibling OUTSIDE tabBarBackdrop — zero recursion):
             //   ONE single invariant indicator Box at all times:
             //   - Smooth scale = 1f + 0.12f * lensIntensity
-            //   - When lensIntensity < 0.01f (settled on Today/Apps/Downloads/Settings): lens() is skipped
-            //     completely so there is zero optical warping or doubled text at pill edges.
-            //   - When dragging, holding (>150ms), or gliding mid-tap: lens() + vibrancy() + RGB edge
-            //     dispersion smoothly ramp with tween(220).
+            //   - lens() stays continuously mounted (refractionAmount smoothly decays to 0f and
+            //     refractionHeight uses coerceAtLeast(0.001f)) so the glass rim melts away smoothly
+            //     without any sudden unmount pop or resting double-reflection.
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -572,11 +575,11 @@ fun CupertinoFloatingTabBar(
                                 backdrop = tabBarBackdrop,
                                 shape = { DropletShape },
                                 effects = {
-                                    if (lensIntensity >= 0.01f) {
+                                    if (lensIntensity > 0.005f) {
                                         vibrancy()
                                         lens(
-                                            refractionHeight = 14f.dp.toPx() * lensIntensity,
-                                            refractionAmount = 24f.dp.toPx() * lensIntensity,
+                                            refractionHeight = 12f.dp.toPx(),
+                                            refractionAmount = 16f.dp.toPx() * lensIntensity,
                                             depthEffect = true,
                                             chromaticAberration = true
                                         )
