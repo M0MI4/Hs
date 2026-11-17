@@ -1,6 +1,7 @@
 package com.example.data.repository
 
 import android.content.Context
+import android.util.Log
 import com.example.R
 import com.example.data.model.DeviceConfigItem
 import com.example.data.model.FeedbackReportItem
@@ -10,14 +11,23 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.snapshots
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.tasks.await
+import kotlinx.coroutines.withContext
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.RequestBody.Companion.toRequestBody
+import org.json.JSONObject
+import java.util.concurrent.TimeUnit
 
 class FirestoreSyncRepository(
     private val db: FirebaseFirestore
@@ -175,8 +185,25 @@ class FirestoreSyncRepository(
         }
     }
 
-    // 4. Submit Feedback or Crash Report
-    suspend fun submitFeedback(type: String, subject: String, details: String, deviceInfo: String): String {
+    companion object {
+        const val SUPPORT_EMAIL = "momiadesigner@gmail.com"
+        private val webhookClient: OkHttpClient by lazy {
+            OkHttpClient.Builder()
+                .connectTimeout(8, TimeUnit.SECONDS)
+                .writeTimeout(8, TimeUnit.SECONDS)
+                .readTimeout(8, TimeUnit.SECONDS)
+                .build()
+        }
+    }
+
+    // 4. Submit Feedback or Broken Link Report -> /feedback + optional /config/feedback_config webhook
+    suspend fun submitFeedback(
+        type: String,
+        subject: String,
+        details: String,
+        deviceInfo: String,
+        appName: String = ""
+    ): String {
         val uid = auth.currentUser?.uid ?: "ANONYMOUS_USER"
         val docRef = db.collection("feedback").document()
         val payload = mapOf(
@@ -184,17 +211,102 @@ class FirestoreSyncRepository(
             "type" to type,
             "subject" to subject,
             "details" to details,
+            "appName" to appName,
+            "recipientEmail" to SUPPORT_EMAIL,
             "deviceInfo" to deviceInfo,
             "createdAt" to FieldValue.serverTimestamp()
         )
         try {
             docRef.set(payload).await()
-            return docRef.id
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.CREATE, docRef.path)
             throw e
+        }
+
+        // Optional silent background email webhook delivery (/config/feedback_config -> emailWebhookUrl)
+        deliverViaWebhookIfConfigured(
+            ticketId = docRef.id,
+            type = type,
+            subject = subject,
+            details = details,
+            deviceInfo = deviceInfo,
+            appName = appName
+        )
+
+        return docRef.id
+    }
+
+    suspend fun getFeedbackWebhookUrl(): String {
+        return try {
+            val snap = db.collection("config").document("feedback_config").get().await()
+            snap.getString("emailWebhookUrl")?.trim().orEmpty()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            ""
+        }
+    }
+
+    suspend fun saveFeedbackWebhookUrl(url: String): Result<Unit> = runCatching {
+        db.collection("config").document("feedback_config")
+            .set(mapOf("emailWebhookUrl" to url.trim()), SetOptions.merge())
+            .await()
+    }
+
+    private suspend fun deliverViaWebhookIfConfigured(
+        ticketId: String,
+        type: String,
+        subject: String,
+        details: String,
+        deviceInfo: String,
+        appName: String
+    ) {
+        val webhookUrl = getFeedbackWebhookUrl()
+        if (webhookUrl.isBlank() || !webhookUrl.startsWith("http", ignoreCase = true)) return
+
+        withContext(Dispatchers.IO) {
+            try {
+                val formattedBody = buildString {
+                    appendLine("Ticket ID: $ticketId")
+                    appendLine("Report Type: $type")
+                    if (appName.isNotBlank()) appendLine("App Name: $appName")
+                    appendLine("Recipient: $SUPPORT_EMAIL")
+                    appendLine("Device: $deviceInfo")
+                    appendLine()
+                    appendLine("Message:")
+                    appendLine(details)
+                }
+                val jsonPayload = JSONObject().apply {
+                    put("to", SUPPORT_EMAIL)
+                    put("_replyto", SUPPORT_EMAIL)
+                    put("_subject", "HsStore Feedback / Report: $subject")
+                    put("subject", "HsStore Feedback / Report: $subject")
+                    put("from_name", "HsStore Android App")
+                    put("type", type)
+                    put("appName", appName)
+                    put("deviceInfo", deviceInfo)
+                    put("ticketId", ticketId)
+                    put("message", formattedBody)
+                }.toString()
+
+                val request = Request.Builder()
+                    .url(webhookUrl)
+                    .addHeader("Accept", "application/json")
+                    .post(jsonPayload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                    .build()
+
+                webhookClient.newCall(request).execute().use { response ->
+                    if (!response.isSuccessful) {
+                        Log.w("FirestoreSyncRepo", "Webhook POST returned HTTP ${response.code}")
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w("FirestoreSyncRepo", "Background webhook delivery failed (non-fatal): ${e.message}")
+            }
         }
     }
 }

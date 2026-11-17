@@ -18,6 +18,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
@@ -66,6 +67,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -76,18 +78,23 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.model.DownloadStatus
+import com.example.data.model.DownloadTask
 import com.example.data.model.ModApp
 import com.example.ui.admin.AdminPanelScreen
 import com.example.ui.admin.AdminViewModel
 import com.example.ui.components.AppDetailSheet
 import com.example.ui.components.CupertinoFloatingTabBar
+import com.example.ui.components.CupertinoSelfUpdateDialog
 import com.example.ui.components.ParticleCanvas
 import com.example.ui.components.UpdateDialog
+import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.LocalizedStrings
 import com.example.ui.screens.AboutScreen
 import com.example.ui.screens.AppsScreen
@@ -99,6 +106,7 @@ import com.example.ui.viewmodel.DownloadsViewModel
 import com.example.ui.viewmodel.SettingsViewModel
 import com.example.ui.viewmodel.StoreViewModel
 import androidx.lifecycle.compose.LifecycleResumeEffect
+import com.example.util.AppInstallState
 import com.example.util.InstalledAppDetector
 import com.example.util.NetworkMonitor
 import com.google.firebase.Firebase
@@ -106,7 +114,9 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * iOS App Store 4-tab Navigation Enum
@@ -191,12 +201,37 @@ fun MainAppContent(
     val activeNewsUrl by storeViewModel.activeNewsUrl.collectAsState()
     val updateConfig by storeViewModel.updateConfig.collectAsState()
     val hasUpdate by storeViewModel.hasUpdate.collectAsState()
+    val storeSelfUpdateConfig by storeViewModel.storeSelfUpdateConfig.collectAsState()
+    val hasSelfUpdate by storeViewModel.hasSelfUpdate.collectAsState()
     val selectedAppForDetail by storeViewModel.selectedAppForDetail.collectAsState()
     val showUpdateDialog by storeViewModel.showUpdateDialog.collectAsState()
+    val showSelfUpdateDialog by storeViewModel.showSelfUpdateDialog.collectAsState()
     val bookmarkedAppIds by storeViewModel.bookmarkedAppIds.collectAsState()
     val activeNotification by storeViewModel.activeNotification.collectAsState()
+    val packageStateVersion by InstalledAppDetector.packageStateVersion.collectAsState()
 
     var isListScrolling by remember { mutableStateOf(false) }
+
+    // Background-filtered count of installed mods with available updates
+    val updatesAvailableCount by produceState(
+        initialValue = 0,
+        apps,
+        packageStateVersion
+    ) {
+        value = withContext(Dispatchers.IO) {
+            apps.count { app ->
+                app.isPublished &&
+                    app.downloadUrl.isNotBlank() &&
+                    app.packageName.isNotBlank() &&
+                    InstalledAppDetector.checkState(
+                        context = context,
+                        packageName = app.packageName,
+                        storeVersionCode = app.versionCode,
+                        expectedSignatureSha256 = app.expectedSignatureSha256
+                    ) == AppInstallState.UPDATE_AVAILABLE
+            }
+        }
+    }
 
     // Android 13+ Notification Permission Launcher
     val notifPermissionLauncher = rememberLauncherForActivityResult(
@@ -276,6 +311,33 @@ fun MainAppContent(
     LaunchedEffect(hasUpdate) {
         if (hasUpdate && updateConfig != null) {
             storeViewModel.setShowUpdateDialog(true)
+        }
+    }
+
+    // Auto-prompt in-app HsStore Self-Update (/config/store_update) on startup
+    LaunchedEffect(hasSelfUpdate, storeSelfUpdateConfig) {
+        if (hasSelfUpdate && storeSelfUpdateConfig != null) {
+            storeViewModel.setShowSelfUpdateDialog(true)
+        }
+    }
+
+    val selfUpdateTask = remember(downloadTasks) {
+        downloadTasks.find { it.appId == "app_hsstore_self_update" }
+    }
+    var autoTriggeredSelfInstallId by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(selfUpdateTask?.status, selfUpdateTask?.filePath) {
+        val task = selfUpdateTask
+        if (showSelfUpdateDialog &&
+            task != null &&
+            task.status == DownloadStatus.COMPLETED &&
+            !task.filePath.isNullOrBlank() &&
+            autoTriggeredSelfInstallId != task.id
+        ) {
+            autoTriggeredSelfInstallId = task.id
+            val installRes = downloadsViewModel.installApk(context, task)
+            if (installRes.isFailure) {
+                Toast.makeText(context, "Installer: ${installRes.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+            }
         }
     }
 
@@ -590,6 +652,8 @@ fun MainAppContent(
                 }
                 }
 
+                val showMiniDownloadBar = activeDownloads.isNotEmpty() && currentTab != MainTab.DOWNLOADS
+
                 // Floating Download Mini-Banner + Liquid Glass Tab Bar overlaid on top of layerBackdrop
                 Column(
                     modifier = Modifier
@@ -598,72 +662,15 @@ fun MainAppContent(
                         .navigationBarsPadding()
                         .zIndex(5f)
                 ) {
-                    // Active Download Mini-Banner
-                    if (activeDownloads.isNotEmpty() && currentTab != MainTab.DOWNLOADS) {
+                    // High-contrast opaque Active Download Mini-Banner
+                    if (showMiniDownloadBar) {
                         val active = activeDownloads.first()
-                        Surface(
-                            shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
-                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp)
-                                .height(56.dp)
-                                .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
-                                .clickable { settingsViewModel.setTab(MainTab.DOWNLOADS) }
-                        ) {
-                            Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 14.dp, vertical = 8.dp),
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(
-                                        modifier = Modifier.weight(1f),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Download,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                        Spacer(modifier = Modifier.width(6.dp))
-                                        Text(
-                                            text = "${LocalizedStrings.get("downloads_active_section", currentLanguage)}: ${active.appName} (${(active.progress * 100).toInt()}%)",
-                                            style = MaterialTheme.typography.labelMedium.copy(fontWeight = FontWeight.Bold),
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Text(
-                                        text = LocalizedStrings.get("downloads_action_view", currentLanguage),
-                                        style = MaterialTheme.typography.labelSmall.copy(
-                                            color = MaterialTheme.colorScheme.primary,
-                                            fontWeight = FontWeight.Bold
-                                        ),
-                                        maxLines = 1,
-                                        softWrap = false
-                                    )
-                                }
-                                Spacer(modifier = Modifier.height(6.dp))
-                                LinearProgressIndicator(
-                                    progress = { active.progress },
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .height(4.dp)
-                                        .clip(RoundedCornerShape(2.dp)),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surface
-                                )
-                            }
-                        }
+                        MiniDownloadBar(
+                            task = active,
+                            currentLanguage = currentLanguage,
+                            isDarkTheme = isDarkTheme,
+                            onClick = { settingsViewModel.setTab(MainTab.DOWNLOADS) }
+                        )
                     }
 
                     // Authentic Apple iOS Floating Liquid Glass Tab Bar
@@ -673,6 +680,7 @@ fun MainAppContent(
                         currentLanguage = currentLanguage,
                         isDarkTheme = isDarkTheme,
                         activeDownloadsCount = activeDownloads.size,
+                        updatesAvailableCount = updatesAvailableCount,
                         backdrop = backdrop
                     )
                 }
@@ -701,12 +709,46 @@ fun MainAppContent(
                     },
                     onPauseDownload = { downloadsViewModel.pauseDownload(it) },
                     onResumeDownload = { downloadsViewModel.resumeDownload(it) },
-                    onCancelDownload = { downloadsViewModel.cancelDownload(it) }
+                    onCancelDownload = { downloadsViewModel.cancelDownload(it) },
+                    onSubmitFeedback = { type, subject, details, deviceInfo, appName ->
+                        settingsViewModel.submitFeedback(type, subject, details, deviceInfo, appName)
+                    },
+                    isDarkTheme = isDarkTheme
+                )
+            }
+
+            // In-App Self-Update Modal Dialog (/config/store_update)
+            if (showSelfUpdateDialog && storeSelfUpdateConfig != null) {
+                val selfCfg = storeSelfUpdateConfig!!
+                CupertinoSelfUpdateDialog(
+                    config = selfCfg,
+                    currentLanguage = currentLanguage,
+                    downloadTask = selfUpdateTask,
+                    onDismiss = { storeViewModel.dismissSelfUpdateDialog() },
+                    onUpdateClick = {
+                        val selfUpdateApp = ModApp(
+                            id = "app_hsstore_self_update",
+                            name = "HsStore v${selfCfg.latestVersionName}",
+                            packageName = context.packageName,
+                            version = selfCfg.latestVersionName,
+                            versionCode = selfCfg.latestVersionCode.toInt(),
+                            sizeBytes = 0L,
+                            sizeDisplay = "",
+                            downloadUrl = selfCfg.downloadUrl
+                        )
+                        downloadsViewModel.startDownload(selfUpdateApp, currentUser)
+                    },
+                    onInstallClick = { task ->
+                        val res = downloadsViewModel.installApk(context, task)
+                        if (res.isFailure) {
+                            Toast.makeText(context, "Installer: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
                 )
             }
 
             // Remote JSON Store Update Dialog
-            if (showUpdateDialog && updateConfig != null) {
+            if (showUpdateDialog && !showSelfUpdateDialog && updateConfig != null) {
                 UpdateDialog(
                     updateConfig = updateConfig!!,
                     onDismiss = { storeViewModel.dismissUpdateDialog() },
@@ -730,17 +772,24 @@ fun MainAppContent(
                 )
             }
 
-            // Floating Cupertino Admin Badge
+            // Floating Cupertino Admin Badge (smoothly shifts above MiniDownloadBar when active)
             if (adminState.isAdminLoggedIn) {
+                val adminBadgeBottomPadding by animateDpAsState(
+                    targetValue = if (showMiniDownloadBar) 148.dp else 90.dp,
+                    label = "admin_badge_bottom_padding"
+                )
                 Surface(
                     onClick = { showAdminPanel = true },
                     shape = AdminBadgeShape,
-                    color = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f),
+                    color = if (isDarkTheme) Color(0xFF1C2029) else Color.White,
                     border = BorderStroke(1.dp, VerifiedBadgeGreen.copy(alpha = 0.8f)),
                     shadowElevation = 8.dp,
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(start = 16.dp, bottom = 96.dp)
+                        .navigationBarsPadding()
+                        .padding(start = 16.dp, bottom = adminBadgeBottomPadding)
+                        .zIndex(6f)
+                        .testTag("admin_studio_badge")
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
@@ -757,7 +806,7 @@ fun MainAppContent(
                             text = "Admin Studio",
                             style = MaterialTheme.typography.labelSmall.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
+                                color = if (isDarkTheme) Color.White else Color(0xFF111827),
                                 fontSize = 11.sp
                             )
                         )
@@ -767,4 +816,89 @@ fun MainAppContent(
         }
     }
 }
+}
+
+@Composable
+fun MiniDownloadBar(
+    task: DownloadTask,
+    currentLanguage: AppLanguage,
+    isDarkTheme: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val barBg = if (isDarkTheme) Color(0xFF1C2029) else Color.White
+    val barBorder = if (isDarkTheme) Color.White.copy(alpha = 0.10f) else Color(0xFFE5E7EB)
+    val primaryTextColor = if (isDarkTheme) Color.White else Color(0xFF111827)
+    val trackColor = if (isDarkTheme) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)
+    val accentBlue = Color(0xFF0A84FF)
+    val pct = (task.progress * 100).toInt().coerceIn(0, 100)
+
+    Surface(
+        shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp),
+        color = barBg,
+        border = BorderStroke(1.dp, barBorder),
+        shadowElevation = 6.dp,
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp)
+            .height(56.dp)
+            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
+            .clickable(onClick = onClick)
+            .testTag("mini_download_bar")
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.Center
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    modifier = Modifier.weight(1f),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = null,
+                        tint = accentBlue,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = "${LocalizedStrings.get("downloads_active_section", currentLanguage)}: ${task.appName} ($pct%)",
+                        style = MaterialTheme.typography.labelMedium.copy(
+                            fontWeight = FontWeight.Bold,
+                            color = primaryTextColor
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = LocalizedStrings.get("downloads_action_view", currentLanguage),
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = accentBlue,
+                        fontWeight = FontWeight.Bold
+                    ),
+                    maxLines = 1,
+                    softWrap = false
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            LinearProgressIndicator(
+                progress = { task.progress },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp)),
+                color = accentBlue,
+                trackColor = trackColor
+            )
+        }
+    }
 }

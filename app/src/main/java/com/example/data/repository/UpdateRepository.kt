@@ -2,8 +2,10 @@ package com.example.data.repository
 
 import android.content.Context
 import android.util.Log
+import com.example.BuildConfig
 import com.example.R
 import com.example.data.model.AppUpdateConfig
+import com.example.data.model.StoreSelfUpdateConfig
 import com.example.data.model.UserNotification
 import com.example.util.NotificationHelper
 import com.google.firebase.firestore.FirebaseFirestore
@@ -31,6 +33,7 @@ class UpdateRepository(
 
     private val scope = CoroutineScope(Dispatchers.IO)
     private val configDoc = firestore.collection("config").document("store")
+    private val storeUpdateDoc = firestore.collection("config").document("store_update")
     private val notificationDoc = firestore.collection("config").document("notification")
 
     private val _updateConfig = MutableStateFlow<AppUpdateConfig?>(
@@ -54,6 +57,12 @@ class UpdateRepository(
     private val _hasUpdate = MutableStateFlow(false)
     val hasUpdate: StateFlow<Boolean> = _hasUpdate.asStateFlow()
 
+    private val _storeSelfUpdateConfig = MutableStateFlow<StoreSelfUpdateConfig?>(null)
+    val storeSelfUpdateConfig: StateFlow<StoreSelfUpdateConfig?> = _storeSelfUpdateConfig.asStateFlow()
+
+    private val _hasSelfUpdate = MutableStateFlow(false)
+    val hasSelfUpdate: StateFlow<Boolean> = _hasSelfUpdate.asStateFlow()
+
     private val _lastCheckedMessage = MutableStateFlow<String>("Monitoring Firestore /config/store.")
     val lastCheckedMessage: StateFlow<String> = _lastCheckedMessage.asStateFlow()
 
@@ -62,7 +71,31 @@ class UpdateRepository(
     init {
         NotificationHelper.initNotificationChannel(context)
         startRealtimeConfigSync()
+        startRealtimeStoreUpdateSync()
         startRealtimeNotificationSync()
+    }
+
+    private fun startRealtimeStoreUpdateSync() {
+        scope.launch {
+            storeUpdateDoc.addSnapshotListener { snapshot, error ->
+                if (error != null) {
+                    Log.w("UpdateRepository", "Error observing /config/store_update: ${error.message}")
+                    return@addSnapshotListener
+                }
+                if (snapshot != null && snapshot.exists()) {
+                    val cfg = StoreSelfUpdateConfig(
+                        latestVersionCode = (snapshot.get("latestVersionCode") as? Number)?.toLong() ?: 0L,
+                        latestVersionName = snapshot.getString("latestVersionName").orEmpty(),
+                        downloadUrl = snapshot.getString("downloadUrl").orEmpty(),
+                        changelog = snapshot.getString("changelog").orEmpty(),
+                        isMandatory = snapshot.getBoolean("isMandatory") ?: snapshot.getBoolean("mandatory") ?: false
+                    )
+                    _storeSelfUpdateConfig.value = cfg
+                    _hasSelfUpdate.value = cfg.latestVersionCode > BuildConfig.VERSION_CODE.toLong() &&
+                        cfg.downloadUrl.isNotBlank()
+                }
+            }
+        }
     }
 
     private fun startRealtimeConfigSync() {
@@ -166,6 +199,26 @@ class UpdateRepository(
         configDoc.set(config, SetOptions.merge()).await()
         _updateConfig.value = config
         checkUpdateAvailability()
+    }
+
+    suspend fun saveStoreSelfUpdate(config: StoreSelfUpdateConfig): Result<Unit> = runCatching {
+        val payload = mapOf(
+            "latestVersionCode" to config.latestVersionCode,
+            "latestVersionName" to config.latestVersionName,
+            "downloadUrl" to config.downloadUrl,
+            "changelog" to config.changelog,
+            "isMandatory" to config.isMandatory
+        )
+        storeUpdateDoc.set(payload, SetOptions.merge()).await()
+        _storeSelfUpdateConfig.value = config
+        _hasSelfUpdate.value = config.latestVersionCode > BuildConfig.VERSION_CODE.toLong() &&
+            config.downloadUrl.isNotBlank()
+    }
+
+    fun dismissSelfUpdate() {
+        if (_storeSelfUpdateConfig.value?.isMandatory != true) {
+            _hasSelfUpdate.value = false
+        }
     }
 
     suspend fun broadcastNotification(notif: UserNotification): Result<Unit> = runCatching {

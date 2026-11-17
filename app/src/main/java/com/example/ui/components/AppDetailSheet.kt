@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -49,6 +50,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -68,6 +70,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -121,12 +124,15 @@ fun AppDetailSheet(
     onReplaceUninstallClick: () -> Unit = {},
     onPauseDownload: (String) -> Unit = {},
     onResumeDownload: (String) -> Unit = {},
-    onCancelDownload: (String) -> Unit = {}
+    onCancelDownload: (String) -> Unit = {},
+    onSubmitFeedback: (suspend (type: String, subject: String, details: String, deviceInfo: String, appName: String) -> Result<String>)? = null,
+    isDarkTheme: Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var selectedTab by remember { mutableIntStateOf(0) }
+    var showBrokenLinkSheet by remember { mutableStateOf(false) }
 
     // Only show sticky bottom download button after top header button scrolls out of view
     val isHeaderScrolledOut by remember {
@@ -377,66 +383,101 @@ fun AppDetailSheet(
                 )
             }
 
-            // Live Download Progress Bar with Pause / Resume / Cancel controls
+            // Live Download Progress Bar with high-contrast surface and circular Pause / Resume / Cancel buttons
             AnimatedVisibility(visible = (isDownloading || isPaused) && downloadTask != null) {
                 if (downloadTask != null) {
+                    val pct = (downloadTask.progress * 100).toInt().coerceIn(0, 100)
+                    val cardSurface = if (isDarkTheme) Color(0xFF1C2029) else Color.White
+                    val cardBorder = if (isDarkTheme) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)
+                    val primaryTextColor = if (isDarkTheme) Color.White else Color(0xFF111827)
+                    val statusLabel = if (isPaused) {
+                        LocalizedStrings.get("action_pause", currentLanguage)
+                    } else {
+                        LocalizedStrings.get("downloads_active_section", currentLanguage)
+                    }
+                    val trackColor = if (isDarkTheme) Color.White.copy(alpha = 0.12f) else Color(0xFFE5E7EB)
+                    val controlBtnBg = if (isDarkTheme) Color.White.copy(alpha = 0.10f) else Color(0xFFF3F4F6)
+                    val cancelBtnTint = if (isDarkTheme) Color.White.copy(alpha = 0.85f) else Color(0xFF374151)
+
                     Column {
                         Spacer(modifier = Modifier.height(12.dp))
                         Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
-                            modifier = Modifier.fillMaxWidth()
+                            shape = RoundedCornerShape(14.dp),
+                            color = cardSurface,
+                            border = BorderStroke(1.dp, cardBorder),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("detail_download_progress_card")
                         ) {
-                            Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                            Column(modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp)) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     verticalAlignment = Alignment.CenterVertically,
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = "${LocalizedStrings.get("downloads_active_section", currentLanguage)}: ${(downloadTask.progress * 100).toInt()}%",
+                                        text = "$statusLabel • $pct%",
                                         style = MaterialTheme.typography.labelLarge.copy(
                                             fontWeight = FontWeight.Bold,
-                                            color = MaterialTheme.colorScheme.primary
+                                            color = primaryTextColor
                                         )
                                     )
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        IconButton(
-                                            onClick = {
-                                                if (isDownloading) onPauseDownload(downloadTask.id)
-                                                else onResumeDownload(downloadTask.id)
-                                            },
-                                            modifier = Modifier.size(32.dp)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = controlBtnBg,
+                                            modifier = Modifier.size(36.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = if (isDownloading) Icons.Default.Pause else Icons.Default.PlayArrow,
-                                                contentDescription = LocalizedStrings.get(if (isDownloading) "action_pause" else "action_resume", currentLanguage),
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                                            IconButton(
+                                                onClick = {
+                                                    if (isDownloading) onPauseDownload(downloadTask.id)
+                                                    else onResumeDownload(downloadTask.id)
+                                                },
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .testTag("detail_progress_pause_resume_btn")
+                                            ) {
+                                                Icon(
+                                                    imageVector = if (isDownloading) Icons.Default.Pause else Icons.Default.PlayArrow,
+                                                    contentDescription = LocalizedStrings.get(if (isDownloading) "action_pause" else "action_resume", currentLanguage),
+                                                    tint = primaryTextColor,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
                                         }
-                                        IconButton(
-                                            onClick = { onCancelDownload(downloadTask.id) },
-                                            modifier = Modifier.size(32.dp)
+                                        Surface(
+                                            shape = CircleShape,
+                                            color = controlBtnBg,
+                                            modifier = Modifier.size(36.dp)
                                         ) {
-                                            Icon(
-                                                imageVector = Icons.Default.Close,
-                                                contentDescription = LocalizedStrings.get("action_cancel", currentLanguage),
-                                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.size(18.dp)
-                                            )
+                                            IconButton(
+                                                onClick = { onCancelDownload(downloadTask.id) },
+                                                modifier = Modifier
+                                                    .fillMaxSize()
+                                                    .testTag("detail_progress_cancel_btn")
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.Close,
+                                                    contentDescription = LocalizedStrings.get("action_cancel", currentLanguage),
+                                                    tint = cancelBtnTint,
+                                                    modifier = Modifier.size(18.dp)
+                                                )
+                                            }
                                         }
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(6.dp))
+                                Spacer(modifier = Modifier.height(10.dp))
                                 LinearProgressIndicator(
                                     progress = { downloadTask.progress },
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .height(5.dp)
+                                        .height(6.dp)
                                         .clip(CircleShape),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    trackColor = MaterialTheme.colorScheme.surface
+                                    color = Color(0xFF0A84FF),
+                                    trackColor = trackColor
                                 )
                             }
                         }
@@ -749,6 +790,34 @@ fun AppDetailSheet(
                 }
             }
 
+            Spacer(modifier = Modifier.height(20.dp))
+
+            // Report Broken Link button (routed via FeedbackModalSheet -> /feedback & momiadesigner@gmail.com)
+            OutlinedButton(
+                onClick = { showBrokenLinkSheet = true },
+                shape = CircleShape,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("report_broken_link_btn")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Flag,
+                    contentDescription = null,
+                    tint = Color(0xFFFF9500),
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = LocalizedStrings.get("detail_report_broken_link", currentLanguage),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                )
+            }
+
             // Secondary bottom button only visible once top header GET button scrolls off screen
             AnimatedVisibility(
                 visible = isHeaderScrolledOut,
@@ -756,7 +825,7 @@ fun AppDetailSheet(
                 exit = fadeOut()
             ) {
                 Column {
-                    Spacer(modifier = Modifier.height(24.dp))
+                    Spacer(modifier = Modifier.height(14.dp))
                     val primaryBtnText = remember(installState, isDownloading, isPaused, isApkDownloaded, downloadTask?.progress, app.sizeDisplay, currentLanguage) {
                         when {
                             isDownloading || isPaused -> {
@@ -866,6 +935,29 @@ fun AppDetailSheet(
                 }
             }
         }
+    }
+
+    // Broken Link Report Modal Sheet
+    if (showBrokenLinkSheet) {
+        FeedbackModalSheet(
+            onDismiss = { showBrokenLinkSheet = false },
+            onSubmitFeedback = { type, subject, details, deviceInfo ->
+                if (onSubmitFeedback != null) {
+                    onSubmitFeedback(type, subject, details, deviceInfo, app.name)
+                } else {
+                    try {
+                        val fallbackRepo = com.example.data.repository.FirestoreSyncRepository(context)
+                        Result.success(fallbackRepo.submitFeedback(type, subject, details, deviceInfo, app.name))
+                    } catch (e: Exception) {
+                        Result.failure(e)
+                    }
+                }
+            },
+            currentLanguage = currentLanguage,
+            initialCategoryKey = "BROKEN_LINK",
+            initialSubject = "Broken Link: ${app.name} (v${app.version})",
+            appName = app.name
+        )
     }
 
     // Fullscreen Zoomable HorizontalPager Lightbox

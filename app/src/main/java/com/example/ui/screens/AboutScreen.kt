@@ -638,7 +638,8 @@ fun AboutScreen(
     if (showFeedbackSheet) {
         FeedbackModalSheet(
             onDismiss = { showFeedbackSheet = false },
-            onSubmitFeedback = onSubmitFeedback
+            onSubmitFeedback = onSubmitFeedback,
+            currentLanguage = currentLanguage
         )
     }
 

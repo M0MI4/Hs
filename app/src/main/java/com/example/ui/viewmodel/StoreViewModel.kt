@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.AppUpdateConfig
 import com.example.data.model.ModApp
 import com.example.data.model.NewsPost
+import com.example.data.model.StoreSelfUpdateConfig
 import com.example.data.model.UserNotification
 import com.example.data.repository.CatalogRepository
 import com.example.data.repository.CatalogSource
@@ -46,6 +47,8 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     // Update & Notification States
     val updateConfig: StateFlow<AppUpdateConfig?> = updateRepo.updateConfig
     val hasUpdate: StateFlow<Boolean> = updateRepo.hasUpdate
+    val storeSelfUpdateConfig: StateFlow<StoreSelfUpdateConfig?> = updateRepo.storeSelfUpdateConfig
+    val hasSelfUpdate: StateFlow<Boolean> = updateRepo.hasSelfUpdate
     val activeNotification: StateFlow<UserNotification?> = updateRepo.activeNotification
 
     // UI Dialog & Selection States
@@ -54,6 +57,9 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _showUpdateDialog = MutableStateFlow(false)
     val showUpdateDialog: StateFlow<Boolean> = _showUpdateDialog.asStateFlow()
+
+    private val _showSelfUpdateDialog = MutableStateFlow(false)
+    val showSelfUpdateDialog: StateFlow<Boolean> = _showSelfUpdateDialog.asStateFlow()
 
     private val _bookmarkedAppIds = MutableStateFlow<Set<String>>(emptySet())
     val bookmarkedAppIds: StateFlow<Set<String>> = _bookmarkedAppIds.asStateFlow()
@@ -113,6 +119,17 @@ class StoreViewModel(application: Application) : AndroidViewModel(application) {
     fun dismissUpdateDialog() {
         _showUpdateDialog.value = false
         updateRepo.dismissUpdate()
+    }
+
+    fun setShowSelfUpdateDialog(show: Boolean) {
+        _showSelfUpdateDialog.value = show
+    }
+
+    fun dismissSelfUpdateDialog() {
+        if (storeSelfUpdateConfig.value?.isMandatory != true) {
+            _showSelfUpdateDialog.value = false
+            updateRepo.dismissSelfUpdate()
+        }
     }
 
     fun syncBookmarksFromFirestore(user: FirebaseUser?) {

@@ -69,6 +69,17 @@ data class AppUpdateConfig(
     val showDialog: Boolean = false
 )
 
+@Immutable
+@IgnoreExtraProperties
+data class StoreSelfUpdateConfig(
+    val latestVersionCode: Long = 0L,
+    val latestVersionName: String = "",
+    val downloadUrl: String = "",
+    val changelog: String = "",
+    @get:com.google.firebase.firestore.PropertyName("isMandatory")
+    val isMandatory: Boolean = false
+)
+
 enum class DownloadStatus {
     QUEUED,
     DOWNLOADING,
@@ -172,6 +183,8 @@ data class FeedbackReportItem(
     val type: String = "SUGGESTION",
     val subject: String = "",
     val details: String = "",
+    val appName: String = "",
+    val recipientEmail: String = "momiadesigner@gmail.com",
     val deviceInfo: String = "",
     @ServerTimestamp val createdAt: Timestamp? = null
 )

@@ -160,4 +160,20 @@ class CupertinoTabBarRobolectricTest {
         assertEquals(MainTab.DOWNLOADS, currentTab)
         composeTestRule.onNodeWithTag("liquid_glass_droplet").assertIsDisplayed()
     }
+
+    @Test
+    fun `apps tab displays numeric badge when updatesAvailableCount is positive`() {
+        composeTestRule.setContent {
+            CupertinoFloatingTabBar(
+                currentTab = MainTab.TODAY,
+                onTabSelected = {},
+                currentLanguage = AppLanguage.ENGLISH,
+                isDarkTheme = true,
+                activeDownloadsCount = 0,
+                updatesAvailableCount = 3,
+                backdrop = null
+            )
+        }
+        composeTestRule.onNodeWithTag("tab_apps_badge", useUnmergedTree = true).assertIsDisplayed()
+    }
 }

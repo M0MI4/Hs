@@ -110,10 +110,12 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import com.example.BuildConfig
 import com.example.data.model.AppUpdateConfig
 import com.example.data.model.ModApp
 import com.example.data.model.NewsPost
 import com.example.data.model.NewsType
+import com.example.data.model.StoreSelfUpdateConfig
 import com.example.ui.components.CupertinoSearchField
 import com.example.ui.components.CupertinoSegmentedControl
 import com.example.ui.theme.VerifiedBadgeGreen
@@ -134,6 +136,8 @@ fun AdminPanelScreen(
     val apps by adminViewModel.catalogRepository.apps.collectAsState()
     val newsList by adminViewModel.newsRepository.news.collectAsState()
     val updateConfig by adminViewModel.updateRepository.updateConfig.collectAsState()
+    val storeSelfUpdateConfig by adminViewModel.updateRepository.storeSelfUpdateConfig.collectAsState()
+    val feedbackWebhookUrl by adminViewModel.feedbackWebhookUrl.collectAsState()
 
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabLabels = listOf("Apps Catalog", "News Broadcasts", "Store Updates")
@@ -300,8 +304,15 @@ fun AdminPanelScreen(
                 )
                 2 -> StoreConfigView(
                     currentConfig = updateConfig ?: AppUpdateConfig(),
+                    currentSelfUpdateConfig = storeSelfUpdateConfig ?: StoreSelfUpdateConfig(
+                        latestVersionCode = BuildConfig.VERSION_CODE.toLong(),
+                        latestVersionName = BuildConfig.VERSION_NAME
+                    ),
+                    currentWebhookUrl = feedbackWebhookUrl,
                     isLoading = adminState.isLoading,
                     onSaveConfig = { cfg -> adminViewModel.saveStoreConfig(cfg) },
+                    onSaveSelfUpdate = { cfg -> adminViewModel.saveStoreSelfUpdate(cfg) },
+                    onSaveFeedbackWebhook = { url -> adminViewModel.saveFeedbackWebhookUrl(url) },
                     onBroadcastNotification = { title, msg, link ->
                         adminViewModel.broadcastNotification(title, msg, link)
                     },
@@ -2016,8 +2027,12 @@ private fun NewsManagementView(
 @Composable
 private fun StoreConfigView(
     currentConfig: AppUpdateConfig,
+    currentSelfUpdateConfig: StoreSelfUpdateConfig,
+    currentWebhookUrl: String,
     isLoading: Boolean,
     onSaveConfig: (AppUpdateConfig) -> Unit,
+    onSaveSelfUpdate: (StoreSelfUpdateConfig) -> Unit = {},
+    onSaveFeedbackWebhook: (String) -> Unit = {},
     onBroadcastNotification: (String, String, String) -> Unit = { _, _, _ -> },
     onClearNotification: () -> Unit = {}
 ) {
@@ -2028,6 +2043,14 @@ private fun StoreConfigView(
     var showDialog by remember(currentConfig) { mutableStateOf(currentConfig.showDialog) }
     var downloadUrl by remember(currentConfig) { mutableStateOf(currentConfig.downloadUrl) }
     var announcementMessage by remember(currentConfig) { mutableStateOf(currentConfig.announcementMessage) }
+
+    var selfUpdateVersionName by remember(currentSelfUpdateConfig) { mutableStateOf(currentSelfUpdateConfig.latestVersionName) }
+    var selfUpdateVersionCode by remember(currentSelfUpdateConfig) { mutableStateOf(currentSelfUpdateConfig.latestVersionCode.toString()) }
+    var selfUpdateDownloadUrl by remember(currentSelfUpdateConfig) { mutableStateOf(currentSelfUpdateConfig.downloadUrl) }
+    var selfUpdateChangelog by remember(currentSelfUpdateConfig) { mutableStateOf(currentSelfUpdateConfig.changelog) }
+    var selfUpdateMandatory by remember(currentSelfUpdateConfig) { mutableStateOf(currentSelfUpdateConfig.isMandatory) }
+
+    var webhookUrl by remember(currentWebhookUrl) { mutableStateOf(currentWebhookUrl) }
 
     var notifTitle by remember { mutableStateOf("") }
     var notifMessage by remember { mutableStateOf("") }
@@ -2250,6 +2273,179 @@ private fun StoreConfigView(
                         Icon(Icons.Default.SystemUpdate, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text("Broadcast Config to All Devices", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // HsStore In-App Self-Update Editor (/config/store_update)
+        item(key = "store_self_update", contentType = "card") {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, VerifiedBadgeGreen.copy(alpha = 0.5f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("admin_self_update_card")
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            text = "Store Self-Update (/config/store_update)",
+                            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                        )
+                        Surface(
+                            shape = CircleShape,
+                            color = VerifiedBadgeGreen.copy(alpha = 0.14f)
+                        ) {
+                            Text(
+                                text = "Installed: v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})",
+                                style = MaterialTheme.typography.labelSmall.copy(
+                                    color = VerifiedBadgeGreen,
+                                    fontWeight = FontWeight.Bold
+                                ),
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Publish a new HsStore APK build. Devices with lower versionCode prompt users to download and install automatically.",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    OutlinedTextField(
+                        value = selfUpdateVersionName,
+                        onValueChange = { selfUpdateVersionName = it },
+                        label = { Text("Latest Version Name (e.g. 2.1.0)") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("self_update_version_name_input")
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = selfUpdateVersionCode,
+                        onValueChange = { selfUpdateVersionCode = it.filter { ch -> ch.isDigit() } },
+                        label = { Text("Latest Version Code (e.g. ${BuildConfig.VERSION_CODE + 1})") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("self_update_version_code_input")
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = selfUpdateDownloadUrl,
+                        onValueChange = { selfUpdateDownloadUrl = it },
+                        label = { Text("HsStore APK Direct Download URL") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("self_update_download_url_input")
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = selfUpdateChangelog,
+                        onValueChange = { selfUpdateChangelog = it },
+                        label = { Text("Self-Update Changelog") },
+                        minLines = 3,
+                        modifier = Modifier.fillMaxWidth().testTag("self_update_changelog_input")
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("Mandatory Update (blocks dismiss)", fontWeight = FontWeight.Medium)
+                        Switch(checked = selfUpdateMandatory, onCheckedChange = { selfUpdateMandatory = it })
+                    }
+
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Button(
+                        onClick = {
+                            val code = selfUpdateVersionCode.toLongOrNull() ?: 1L
+                            onSaveSelfUpdate(
+                                StoreSelfUpdateConfig(
+                                    latestVersionCode = code,
+                                    latestVersionName = selfUpdateVersionName.trim(),
+                                    downloadUrl = selfUpdateDownloadUrl.trim(),
+                                    changelog = selfUpdateChangelog.trim(),
+                                    isMandatory = selfUpdateMandatory
+                                )
+                            )
+                        },
+                        enabled = !isLoading,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = VerifiedBadgeGreen),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("publish_self_update_btn")
+                    ) {
+                        Icon(Icons.Default.SystemUpdate, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Publish Store Self-Update", fontWeight = FontWeight.Bold, color = Color.White)
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Feedback Email Webhook Configuration (/config/feedback_config -> momiadesigner@gmail.com)
+        item(key = "feedback_webhook_config", contentType = "card") {
+            Card(
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text(
+                        text = "Feedback Email Routing (momiadesigner@gmail.com)",
+                        style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "All user reports save to Firestore /feedback. Optionally configure a Formspree / Web3Forms webhook URL to automatically forward email alerts.",
+                        style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedTextField(
+                        value = webhookUrl,
+                        onValueChange = { webhookUrl = it },
+                        label = { Text("Email Webhook URL (optional)") },
+                        placeholder = { Text("https://formspree.io/f/...") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth().testTag("feedback_webhook_url_input")
+                    )
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    OutlinedButton(
+                        onClick = { onSaveFeedbackWebhook(webhookUrl) },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("save_feedback_webhook_btn")
+                    ) {
+                        Text("Save Email Webhook", fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

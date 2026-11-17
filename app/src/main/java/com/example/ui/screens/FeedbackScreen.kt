@@ -1,5 +1,7 @@
 package com.example.ui.screens
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.BorderStroke
@@ -17,14 +19,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.BugReport
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Feedback
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -35,6 +34,7 @@ import androidx.compose.material3.ElevatedFilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Surface
@@ -73,9 +73,9 @@ fun FeedbackScreen(
 
     val feedbackTypes = listOf(
         "SUGGESTION" to "Suggestion",
+        "BROKEN_LINK" to "Broken Link",
         "BUG" to "Bug Report",
-        "CRASH" to "Crash Report",
-        "GENERAL" to "General"
+        "CRASH" to "Crash Report"
     )
 
     val deviceInfo = "Model: ${Build.MANUFACTURER} ${Build.MODEL} | Android: ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT}) | HsStore v1.0.0"
@@ -313,6 +313,39 @@ fun FeedbackScreen(
                             Spacer(modifier = Modifier.width(8.dp))
                             Text("Submit Report", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    OutlinedButton(
+                        onClick = {
+                            val emailIntent = Intent(Intent.ACTION_SENDTO).apply {
+                                data = Uri.parse("mailto:momiadesigner@gmail.com")
+                                putExtra(Intent.EXTRA_EMAIL, arrayOf("momiadesigner@gmail.com"))
+                                putExtra(
+                                    Intent.EXTRA_SUBJECT,
+                                    "HsStore Feedback / Report" + if (subject.isNotBlank()) ": ${subject.trim()}" else ""
+                                )
+                                putExtra(
+                                    Intent.EXTRA_TEXT,
+                                    "Type: $selectedType\nDevice: $deviceInfo\n\n${details.trim()}"
+                                )
+                            }
+                            try {
+                                context.startActivity(Intent.createChooser(emailIntent, "Send via Email App"))
+                            } catch (_: Exception) {
+                                Toast.makeText(context, "No email app found (momiadesigner@gmail.com)", Toast.LENGTH_LONG).show()
+                            }
+                        },
+                        shape = RoundedCornerShape(10.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("feedback_screen_email_btn")
+                    ) {
+                        Icon(imageVector = Icons.Default.Email, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("Send via Email App", fontWeight = FontWeight.SemiBold)
                     }
                 }
             }

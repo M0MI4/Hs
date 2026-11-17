@@ -388,7 +388,7 @@ class DownloadRepository(
         appId: String,
         downloadedFile: File
     ): Boolean {
-        if (appId.isBlank() || appId == "app_hsstore_update") return false
+        if (appId.isBlank() || appId == "app_hsstore_update" || appId == "app_hsstore_self_update") return false
         if (!downloadedFile.exists() || downloadedFile.length() <= 0L) return false
 
         val jobState = activeJobStates.getOrPut(taskId) { DownloadJobState(hasCountedDownload = false) }

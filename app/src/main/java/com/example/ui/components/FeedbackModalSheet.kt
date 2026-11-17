@@ -1,8 +1,13 @@
 package com.example.ui.components
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.widget.Toast
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,15 +24,19 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
@@ -50,29 +59,73 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.BuildConfig
+import com.example.ui.i18n.AppLanguage
+import com.example.ui.i18n.LocalizedStrings
 import kotlinx.coroutines.launch
+
+const val SUPPORT_RECIPIENT_EMAIL = "momiadesigner@gmail.com"
+
+fun buildSupportEmailIntent(
+    category: String,
+    appName: String,
+    subject: String,
+    details: String,
+    deviceInfo: String
+): Intent {
+    val cleanSubject = buildString {
+        append("HsStore Feedback / Report")
+        if (appName.isNotBlank()) append(" — $appName")
+        if (subject.isNotBlank()) append(": $subject")
+    }
+    val body = buildString {
+        appendLine("Category: $category")
+        if (appName.isNotBlank()) appendLine("App: $appName")
+        appendLine("Subject: ${subject.ifBlank { "(none)" }}")
+        appendLine("Device: $deviceInfo")
+        appendLine()
+        appendLine("Details:")
+        appendLine(details.ifBlank { "(none)" })
+    }
+    val uri = Uri.parse(
+        "mailto:$SUPPORT_RECIPIENT_EMAIL?subject=${Uri.encode(cleanSubject)}&body=${Uri.encode(body)}"
+    )
+    return Intent(Intent.ACTION_SENDTO, uri).apply {
+        putExtra(Intent.EXTRA_EMAIL, arrayOf(SUPPORT_RECIPIENT_EMAIL))
+        putExtra(Intent.EXTRA_SUBJECT, cleanSubject)
+        putExtra(Intent.EXTRA_TEXT, body)
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedbackModalSheet(
     onDismiss: () -> Unit,
     onSubmitFeedback: suspend (type: String, subject: String, details: String, deviceInfo: String) -> Result<String>,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    currentLanguage: AppLanguage = AppLanguage.ENGLISH,
+    initialCategoryKey: String = "SUGGESTION",
+    initialSubject: String = "",
+    appName: String = ""
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
 
-    val categories = listOf("Suggestion", "Bug Report", "Crash Trace", "General")
-    val categoryKeys = listOf("SUGGESTION", "BUG", "CRASH", "GENERAL")
-    var selectedCategoryIndex by remember { mutableIntStateOf(0) }
+    val brokenLinkLabel = LocalizedStrings.get("feedback_broken_link_chip", currentLanguage)
+    val categories = listOf("Suggestion", brokenLinkLabel, "Bug Report", "Crash Trace", "General")
+    val categoryKeys = listOf("SUGGESTION", "BROKEN_LINK", "BUG", "CRASH", "GENERAL")
+    val initialIndex = remember(initialCategoryKey) {
+        categoryKeys.indexOf(initialCategoryKey).takeIf { it >= 0 } ?: 0
+    }
+    var selectedCategoryIndex by remember(initialIndex) { mutableIntStateOf(initialIndex) }
 
-    var subject by remember { mutableStateOf("") }
+    var subject by remember(initialSubject) { mutableStateOf(initialSubject) }
     var details by remember { mutableStateOf("") }
     var includeTelemetry by remember { mutableStateOf(true) }
     var isSubmitting by remember { mutableStateOf(false) }
 
-    val deviceInfo = "${Build.MANUFACTURER} ${Build.MODEL} | Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}) | HsStore v1.0"
+    val deviceInfo = "${Build.MANUFACTURER} ${Build.MODEL} | Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}) | HsStore v${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})"
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -104,7 +157,7 @@ fun FeedbackModalSheet(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Feedback & Crash Reports",
+                    text = LocalizedStrings.get("feedback_sheet_title", currentLanguage),
                     style = MaterialTheme.typography.titleLarge.copy(
                         fontWeight = FontWeight.Bold,
                         fontSize = 20.sp
@@ -117,18 +170,39 @@ fun FeedbackModalSheet(
             }
 
             Text(
-                text = "Send bug reports, suggestions, or crash diagnostics to our engineering group.",
+                text = "Reports are logged for engineering review and routed to $SUPPORT_RECIPIENT_EMAIL.",
                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
-            // iOS Segmented Category Picker
-            CupertinoSegmentedControl(
-                items = categories,
-                selectedIndex = selectedCategoryIndex,
-                onItemSelected = { selectedCategoryIndex = it }
-            )
+            // Horizontal category chips so all 5 categories (including Broken Link) fit cleanly
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                categories.forEachIndexed { idx, label ->
+                    val selected = idx == selectedCategoryIndex
+                    FilterChip(
+                        selected = selected,
+                        onClick = { selectedCategoryIndex = idx },
+                        label = {
+                            Text(
+                                text = label,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                fontSize = 12.sp
+                            )
+                        },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primary,
+                            selectedLabelColor = Color.White
+                        ),
+                        modifier = Modifier.testTag("feedback_cat_${categoryKeys[idx].lowercase()}")
+                    )
+                }
+            }
 
             Spacer(modifier = Modifier.height(14.dp))
 
@@ -143,7 +217,9 @@ fun FeedbackModalSheet(
                     unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
                 ),
                 singleLine = true,
-                modifier = Modifier.fillMaxWidth().testTag("feedback_subject_input")
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("feedback_subject_input")
             )
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -152,7 +228,7 @@ fun FeedbackModalSheet(
                 value = details,
                 onValueChange = { details = it },
                 label = { Text("Detailed Description") },
-                placeholder = { Text("Describe the reproduction steps or your suggestion...") },
+                placeholder = { Text("Describe the broken link, issue, or suggestion...") },
                 shape = RoundedCornerShape(10.dp),
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
@@ -160,7 +236,9 @@ fun FeedbackModalSheet(
                 ),
                 minLines = 4,
                 maxLines = 7,
-                modifier = Modifier.fillMaxWidth().testTag("feedback_details_input")
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("feedback_details_input")
             )
 
             Spacer(modifier = Modifier.height(14.dp))
@@ -190,7 +268,7 @@ fun FeedbackModalSheet(
                 )
             }
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
             Button(
                 onClick = {
@@ -202,10 +280,10 @@ fun FeedbackModalSheet(
                         isSubmitting = true
                         val telemetry = if (includeTelemetry) deviceInfo else "Telemetry disabled"
                         val key = categoryKeys[selectedCategoryIndex]
-                        val res = onSubmitFeedback(key, subject, details, telemetry)
+                        val res = onSubmitFeedback(key, subject.trim(), details.trim(), telemetry)
                         isSubmitting = false
                         if (res.isSuccess) {
-                            Toast.makeText(context, "Feedback sent! Reference: ${res.getOrNull()}", Toast.LENGTH_LONG).show()
+                            Toast.makeText(context, "Report sent! Ref: ${res.getOrNull()}", Toast.LENGTH_LONG).show()
                             onDismiss()
                         } else {
                             Toast.makeText(context, "Failed: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
@@ -230,6 +308,49 @@ fun FeedbackModalSheet(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Submit Report", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                 }
+            }
+
+            Spacer(modifier = Modifier.height(10.dp))
+
+            // Fallback intent button routing directly to momiadesigner@gmail.com
+            OutlinedButton(
+                onClick = {
+                    val key = categoryKeys[selectedCategoryIndex]
+                    val telemetry = if (includeTelemetry) deviceInfo else "Telemetry disabled"
+                    val emailIntent = buildSupportEmailIntent(
+                        category = key,
+                        appName = appName,
+                        subject = subject.trim(),
+                        details = details.trim(),
+                        deviceInfo = telemetry
+                    )
+                    try {
+                        context.startActivity(emailIntent)
+                    } catch (_: ActivityNotFoundException) {
+                        Toast.makeText(context, "No email client installed ($SUPPORT_RECIPIENT_EMAIL)", Toast.LENGTH_SHORT).show()
+                    }
+                },
+                shape = CircleShape,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .testTag("send_via_email_fallback_btn")
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Email,
+                    contentDescription = null,
+                    modifier = Modifier.size(16.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = LocalizedStrings.get("feedback_email_fallback", currentLanguage),
+                    style = MaterialTheme.typography.titleSmall.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                )
             }
         }
     }

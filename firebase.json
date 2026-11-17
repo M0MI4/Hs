@@ -4,5 +4,14 @@
       "database": "ai-studio-android-hsstore-5afff47c-ff18-4e6a-894b-5eb263ea8a4b",
       "rules": "firestore.rules"
     }
-  ]
+  ],
+  "emulators": {
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8085
+    },
+    "ui": {
+      "enabled": false
+    }
+  }
 }

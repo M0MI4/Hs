@@ -11,8 +11,10 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.model.AppUpdateConfig
 import com.example.data.model.ModApp
 import com.example.data.model.NewsPost
+import com.example.data.model.StoreSelfUpdateConfig
 import com.example.data.model.UserNotification
 import com.example.data.repository.CatalogRepository
+import com.example.data.repository.FirestoreSyncRepository
 import com.example.data.repository.NewsRepository
 import com.example.data.repository.UpdateRepository
 import com.google.firebase.auth.FirebaseAuth
@@ -69,6 +71,10 @@ class AdminViewModel(
     val catalogRepository: CatalogRepository = CatalogRepository(application.applicationContext)
     val newsRepository: NewsRepository = NewsRepository(application.applicationContext)
     val updateRepository: UpdateRepository = UpdateRepository(application.applicationContext)
+    val firestoreRepository: FirestoreSyncRepository = FirestoreSyncRepository(application.applicationContext)
+
+    private val _feedbackWebhookUrl = MutableStateFlow("")
+    val feedbackWebhookUrl: StateFlow<String> = _feedbackWebhookUrl.asStateFlow()
 
     private val prefs = getApplication<Application>().getSharedPreferences("hsstore_admin_prefs", Context.MODE_PRIVATE)
 
@@ -95,6 +101,9 @@ class AdminViewModel(
             }
         } catch (e: Exception) {
             Log.w("AdminViewModel", "Auth listener setup skipped: ${e.message}")
+        }
+        viewModelScope.launch {
+            _feedbackWebhookUrl.value = firestoreRepository.getFeedbackWebhookUrl()
         }
     }
 
@@ -447,6 +456,45 @@ class AdminViewModel(
                 _adminState.value = _adminState.value.copy(
                     isLoading = false,
                     errorMessage = result.exceptionOrNull()?.localizedMessage ?: "Failed to update store config"
+                )
+            }
+        }
+    }
+
+    fun saveStoreSelfUpdate(config: StoreSelfUpdateConfig, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            _adminState.value = _adminState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
+            val result = updateRepository.saveStoreSelfUpdate(config)
+            if (result.isSuccess) {
+                _adminState.value = _adminState.value.copy(
+                    isLoading = false,
+                    successMessage = "HsStore Self-Update v${config.latestVersionName} (Build ${config.latestVersionCode}) published to /config/store_update!"
+                )
+                onComplete()
+            } else {
+                _adminState.value = _adminState.value.copy(
+                    isLoading = false,
+                    errorMessage = result.exceptionOrNull()?.localizedMessage ?: "Failed to publish /config/store_update"
+                )
+            }
+        }
+    }
+
+    fun saveFeedbackWebhookUrl(url: String, onComplete: () -> Unit = {}) {
+        viewModelScope.launch {
+            _adminState.value = _adminState.value.copy(isLoading = true, errorMessage = null, successMessage = null)
+            val result = firestoreRepository.saveFeedbackWebhookUrl(url)
+            if (result.isSuccess) {
+                _feedbackWebhookUrl.value = url.trim()
+                _adminState.value = _adminState.value.copy(
+                    isLoading = false,
+                    successMessage = "Saved email webhook URL to /config/feedback_config!"
+                )
+                onComplete()
+            } else {
+                _adminState.value = _adminState.value.copy(
+                    isLoading = false,
+                    errorMessage = result.exceptionOrNull()?.localizedMessage ?: "Failed to save email webhook URL"
                 )
             }
         }

@@ -105,15 +105,31 @@
       },
       "required": ["userId", "appId", "appName"]
     },
+    "StoreSelfUpdateConfig": {
+      "title": "StoreSelfUpdateConfig",
+      "description": "In-app HsStore self-update metadata stored at /config/store_update.",
+      "type": "object",
+      "properties": {
+        "latestVersionCode": { "type": "integer" },
+        "latestVersionName": { "type": "string" },
+        "downloadUrl": { "type": "string" },
+        "changelog": { "type": "string" },
+        "isMandatory": { "type": "boolean" }
+      },
+      "required": ["latestVersionCode", "latestVersionName", "downloadUrl"]
+    },
     "FeedbackReport": {
       "title": "FeedbackReport",
-      "description": "User feedback, suggestions, or crash report submission.",
+      "description": "User feedback, broken link report, or crash report submission.",
       "type": "object",
       "properties": {
         "userId": { "type": "string" },
         "type": { "type": "string" },
         "subject": { "type": "string" },
-        "details": { "type": "string" }
+        "details": { "type": "string" },
+        "appName": { "type": "string" },
+        "recipientEmail": { "type": "string" },
+        "deviceInfo": { "type": "string" }
       },
       "required": ["userId", "type", "subject", "details"]
     }

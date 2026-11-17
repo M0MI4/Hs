@@ -118,6 +118,7 @@ fun CupertinoFloatingTabBar(
     currentLanguage: AppLanguage,
     isDarkTheme: Boolean,
     activeDownloadsCount: Int,
+    updatesAvailableCount: Int = 0,
     backdrop: LayerBackdrop? = null,
     modifier: Modifier = Modifier
 ) {
@@ -473,6 +474,7 @@ fun CupertinoFloatingTabBar(
                         label = LocalizedStrings.get("tab_apps", currentLanguage),
                         selectedIcon = Icons.Filled.Apps,
                         unselectedIcon = Icons.Outlined.Apps,
+                        badgeCount = updatesAvailableCount,
                         testTag = "tab_apps",
                         modifier = Modifier.weight(1f)
                     )
@@ -645,13 +647,12 @@ private fun CupertinoTabItem(
     Column(
         modifier = modifier
             .fillMaxHeight()
-            .clip(TabItemShape)
             .clickable(
                 interactionSource = interactionSource,
                 indication = null,
                 onClick = onClick
             )
-            .padding(horizontal = 4.dp, vertical = 4.dp)
+            .padding(horizontal = 4.dp, vertical = 2.dp)
             .graphicsLayer {
                 scaleX = scale
                 scaleY = scale
@@ -662,10 +663,12 @@ private fun CupertinoTabItem(
     ) {
         if (badgeCount > 0) {
             BadgedBox(
+                modifier = Modifier.padding(top = 2.dp, end = 4.dp),
                 badge = {
                     Badge(
                         containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = Color.White
+                        contentColor = Color.White,
+                        modifier = Modifier.testTag("${testTag}_badge")
                     ) {
                         Text("$badgeCount", fontSize = 9.sp, fontWeight = FontWeight.Bold)
                     }

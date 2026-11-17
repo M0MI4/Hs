@@ -39,7 +39,8 @@ service cloud.firestore {
     }
 
     match /feedback/{feedbackId} {
-      allow read, write: if true;
+      allow create: if true;
+      allow read, update, delete: if isAdmin();
     }
   }
 }

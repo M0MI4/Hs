@@ -69,9 +69,15 @@ class SettingsViewModel(application: Application) : AndroidViewModel(application
         _particleDensity.value = density
     }
 
-    suspend fun submitFeedback(type: String, subject: String, details: String, deviceInfo: String): Result<String> {
+    suspend fun submitFeedback(
+        type: String,
+        subject: String,
+        details: String,
+        deviceInfo: String,
+        appName: String = ""
+    ): Result<String> {
         return try {
-            val docId = firestoreRepo.submitFeedback(type, subject, details, deviceInfo)
+            val docId = firestoreRepo.submitFeedback(type, subject, details, deviceInfo, appName)
             Result.success(docId)
         } catch (e: Exception) {
             Result.failure(e)
