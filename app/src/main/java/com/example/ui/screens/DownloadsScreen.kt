@@ -79,16 +79,25 @@ fun DownloadsScreen(
     onIsScrollingChanged: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val activeTasks = androidx.compose.runtime.remember(tasks) {
+    val context = LocalContext.current
+    val visibleTasks = androidx.compose.runtime.remember(tasks) {
         tasks.filter {
+            !it.isSelfUpdate &&
+            it.appId != "app_hsstore_self_update" &&
+            it.appId != "app_hsstore_update" &&
+            it.packageName != context.packageName
+        }
+    }
+    val activeTasks = androidx.compose.runtime.remember(visibleTasks) {
+        visibleTasks.filter {
             it.status == DownloadStatus.DOWNLOADING ||
             it.status == DownloadStatus.PAUSED ||
             it.status == DownloadStatus.QUEUED ||
             it.status == DownloadStatus.FAILED
         }
     }
-    val completedTasks = androidx.compose.runtime.remember(tasks) {
-        tasks.filter { it.status == DownloadStatus.COMPLETED }
+    val completedTasks = androidx.compose.runtime.remember(visibleTasks) {
+        visibleTasks.filter { it.status == DownloadStatus.COMPLETED }
     }
 
     val lazyListState = androidx.compose.foundation.lazy.rememberLazyListState()

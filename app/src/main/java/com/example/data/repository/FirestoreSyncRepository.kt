@@ -1,7 +1,9 @@
 package com.example.data.repository
 
 import android.content.Context
+import android.os.Build
 import android.util.Log
+import com.example.BuildConfig
 import com.example.R
 import com.example.data.model.DeviceConfigItem
 import com.example.data.model.FeedbackReportItem
@@ -187,6 +189,9 @@ class FirestoreSyncRepository(
 
     companion object {
         const val SUPPORT_EMAIL = "momiadesigner@gmail.com"
+        private const val TELEGRAM_BOT_ENDPOINT =
+            "https://api.telegram.org/bot9244376266:AAFKGnrCq49lUKlt60i09mhsCdUpy4A9sGg/sendMessage"
+        private val TELEGRAM_CHAT_IDS = listOf("5909261841", "708637965")
         private val webhookClient: OkHttpClient by lazy {
             OkHttpClient.Builder()
                 .connectTimeout(8, TimeUnit.SECONDS)
@@ -224,6 +229,16 @@ class FirestoreSyncRepository(
             handleFirestoreError(e, OperationType.CREATE, docRef.path)
             throw e
         }
+
+        // Send immediately to Telegram Bot API (runs on Dispatchers.IO, non-fatal on network error)
+        deliverToTelegramBot(
+            ticketId = docRef.id,
+            type = type,
+            subject = subject,
+            details = details,
+            deviceInfo = deviceInfo,
+            appName = appName
+        )
 
         // Optional silent background email webhook delivery (/config/feedback_config -> emailWebhookUrl)
         deliverViaWebhookIfConfigured(
@@ -306,6 +321,74 @@ class FirestoreSyncRepository(
                 throw e
             } catch (e: Exception) {
                 Log.w("FirestoreSyncRepo", "Background webhook delivery failed (non-fatal): ${e.message}")
+            }
+        }
+    }
+
+    private suspend fun deliverToTelegramBot(
+        ticketId: String,
+        type: String,
+        subject: String,
+        details: String,
+        deviceInfo: String,
+        appName: String
+    ) {
+        withContext(Dispatchers.IO) {
+            val deviceModel = listOf(Build.MANUFACTURER, Build.MODEL)
+                .filter { it.isNotBlank() }
+                .joinToString(" ")
+                .ifBlank { "Android Device" }
+            val androidVersion = "Android ${Build.VERSION.RELEASE} (API ${Build.VERSION.SDK_INT})"
+            val appVersion = "HsStore v${BuildConfig.VERSION_NAME} (Build ${BuildConfig.VERSION_CODE})"
+
+            val formattedMessage = buildString {
+                appendLine("📩 HsStore Feedback & Report")
+                appendLine()
+                appendLine("📱 App: $appVersion")
+                appendLine("📟 Device: $deviceModel • $androidVersion")
+                if (deviceInfo.isNotBlank()) {
+                    appendLine("ℹ️ Device Info: $deviceInfo")
+                }
+                appendLine("🏷️ Type: $type")
+                if (appName.isNotBlank()) {
+                    appendLine("📦 Target App: $appName")
+                }
+                appendLine("📝 Subject: $subject")
+                appendLine("🆔 Ticket: $ticketId")
+                appendLine()
+                appendLine("💬 Message:")
+                appendLine(details)
+            }.trim()
+
+            for (chatId in TELEGRAM_CHAT_IDS) {
+                try {
+                    val jsonPayload = JSONObject().apply {
+                        put("chat_id", chatId)
+                        put("text", formattedMessage)
+                    }.toString()
+
+                    val request = Request.Builder()
+                        .url(TELEGRAM_BOT_ENDPOINT)
+                        .addHeader("Accept", "application/json")
+                        .post(jsonPayload.toRequestBody("application/json; charset=utf-8".toMediaType()))
+                        .build()
+
+                    webhookClient.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) {
+                            Log.w(
+                                "FirestoreSyncRepo",
+                                "Telegram sendMessage for chat $chatId returned HTTP ${response.code}"
+                            )
+                        }
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Log.w(
+                        "FirestoreSyncRepo",
+                        "Telegram Bot delivery failed for chat $chatId (non-fatal): ${e.message}"
+                    )
+                }
             }
         }
     }

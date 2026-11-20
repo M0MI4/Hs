@@ -45,7 +45,6 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DragHandle
@@ -189,7 +188,7 @@ fun AdminPanelScreen(
                         )
                     )
                     Text(
-                        text = adminState.currentAdminEmail ?: "Cloud Firestore Console",
+                        text = "Cloud Firestore Console",
                         style = MaterialTheme.typography.bodySmall.copy(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             fontSize = 12.sp
@@ -275,9 +274,6 @@ fun AdminPanelScreen(
             when (selectedTab) {
                 0 -> AppsManagementView(
                     apps = apps,
-                    isSeedingCatalog = adminState.isSeedingCatalog,
-                    seedProgressText = adminState.seedProgressText,
-                    onSeedCatalogDrafts = { adminViewModel.seed51CatalogDrafts() },
                     onEditApp = {
                         editingApp = it
                         showAppEditorSheet = true
@@ -401,9 +397,6 @@ fun AdminPanelScreen(
 @Composable
 private fun AppsManagementView(
     apps: List<ModApp>,
-    isSeedingCatalog: Boolean = false,
-    seedProgressText: String? = null,
-    onSeedCatalogDrafts: () -> Unit = {},
     onEditApp: (ModApp) -> Unit,
     onCreateApp: () -> Unit,
     onDeleteApp: (ModApp) -> Unit,
@@ -491,48 +484,6 @@ private fun AppsManagementView(
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("New App", fontWeight = FontWeight.Bold, fontSize = 13.sp)
                     }
-                }
-            }
-
-            // One-Tap 51 Catalog Drafts Seeder & HD Icon Fetcher
-            OutlinedButton(
-                onClick = onSeedCatalogDrafts,
-                enabled = !isSeedingCatalog,
-                shape = RoundedCornerShape(14.dp),
-                border = BorderStroke(1.dp, Color(0xFFFF9500).copy(alpha = 0.65f)),
-                colors = ButtonDefaults.outlinedButtonColors(
-                    containerColor = Color(0xFFFF9500).copy(alpha = 0.10f),
-                    contentColor = Color(0xFFFF9500)
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 10.dp)
-                    .testTag("seed_51_catalog_btn")
-            ) {
-                if (isSeedingCatalog) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        color = Color(0xFFFF9500),
-                        strokeWidth = 2.dp
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = seedProgressText ?: "Seeding 51 Drafts & Fetching HD Icons...",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.CloudDownload,
-                        contentDescription = "Seed 51 Catalog Drafts",
-                        modifier = Modifier.size(18.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        text = "Seed 51 Catalog Drafts (Fetch 512px Icons)",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp
-                    )
                 }
             }
 
@@ -835,9 +786,10 @@ private fun AppEditorBottomSheet(
     var downloadUrl by remember { mutableStateOf(app?.downloadUrl ?: "") }
     var iconUrl by remember { mutableStateOf(app?.iconUrl ?: "") }
     var sha256 by remember { mutableStateOf(app?.sha256 ?: "") }
-    var description by remember { mutableStateOf(app?.description ?: "") }
-    var modFeaturesText by remember { mutableStateOf(app?.modFeatures?.joinToString("\n") ?: "") }
-    var author by remember { mutableStateOf(app?.author ?: "HsStore") }
+    var description by remember(app) { mutableStateOf(app?.description ?: "") }
+    var modFeaturesText by remember(app) { mutableStateOf(app?.modFeatures?.joinToString("\n") ?: "") }
+    var changelog by remember(app) { mutableStateOf(app?.changelog ?: "") }
+    var author by remember(app) { mutableStateOf(app?.author ?: "HsStore") }
     var isVerified by remember { mutableStateOf(app?.isVerified ?: true) }
     var isPublished by remember(app) { mutableStateOf(app?.isPublished ?: true) }
     var requiresUninstallOfficial by remember(app) { mutableStateOf(app?.requiresUninstallOfficial ?: false) }
@@ -1274,6 +1226,20 @@ private fun AppEditorBottomSheet(
                 }
 
                 item {
+                    OutlinedTextField(
+                        value = changelog,
+                        onValueChange = { changelog = it },
+                        label = { Text("Changelog / Release Notes") },
+                        placeholder = { Text("What's new in this version...") },
+                        minLines = 3,
+                        maxLines = 8,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("app_changelog_input")
+                    )
+                }
+
+                item {
                     Column(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -1441,6 +1407,7 @@ private fun AppEditorBottomSheet(
                         sha256 = sha256.trim(),
                         description = description.trim(),
                         modFeatures = features,
+                        changelog = changelog.trim(),
                         author = author.trim().ifBlank { "HsStore" },
                         isVerified = isVerified,
                         isPublished = isPublished,
@@ -2405,7 +2372,7 @@ private fun StoreConfigView(
             Spacer(modifier = Modifier.height(16.dp))
         }
 
-        // Feedback Email Webhook Configuration (/config/feedback_config -> momiadesigner@gmail.com)
+        // Feedback Webhook Configuration (/config/feedback_config)
         item(key = "feedback_webhook_config", contentType = "card") {
             Card(
                 shape = RoundedCornerShape(16.dp),
@@ -2415,7 +2382,7 @@ private fun StoreConfigView(
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text(
-                        text = "Feedback Email Routing (momiadesigner@gmail.com)",
+                        text = "Feedback Webhook Routing",
                         style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold)
                     )
                     Spacer(modifier = Modifier.height(4.dp))

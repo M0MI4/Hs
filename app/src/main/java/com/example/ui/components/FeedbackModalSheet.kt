@@ -1,11 +1,7 @@
 package com.example.ui.components
 
-import android.content.ActivityNotFoundException
-import android.content.Intent
-import android.net.Uri
 import android.os.Build
 import android.widget.Toast
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -24,7 +20,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -36,7 +31,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Switch
@@ -64,39 +58,6 @@ import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.LocalizedStrings
 import kotlinx.coroutines.launch
 
-const val SUPPORT_RECIPIENT_EMAIL = "momiadesigner@gmail.com"
-
-fun buildSupportEmailIntent(
-    category: String,
-    appName: String,
-    subject: String,
-    details: String,
-    deviceInfo: String
-): Intent {
-    val cleanSubject = buildString {
-        append("HsStore Feedback / Report")
-        if (appName.isNotBlank()) append(" — $appName")
-        if (subject.isNotBlank()) append(": $subject")
-    }
-    val body = buildString {
-        appendLine("Category: $category")
-        if (appName.isNotBlank()) appendLine("App: $appName")
-        appendLine("Subject: ${subject.ifBlank { "(none)" }}")
-        appendLine("Device: $deviceInfo")
-        appendLine()
-        appendLine("Details:")
-        appendLine(details.ifBlank { "(none)" })
-    }
-    val uri = Uri.parse(
-        "mailto:$SUPPORT_RECIPIENT_EMAIL?subject=${Uri.encode(cleanSubject)}&body=${Uri.encode(body)}"
-    )
-    return Intent(Intent.ACTION_SENDTO, uri).apply {
-        putExtra(Intent.EXTRA_EMAIL, arrayOf(SUPPORT_RECIPIENT_EMAIL))
-        putExtra(Intent.EXTRA_SUBJECT, cleanSubject)
-        putExtra(Intent.EXTRA_TEXT, body)
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeedbackModalSheet(
@@ -105,8 +66,7 @@ fun FeedbackModalSheet(
     modifier: Modifier = Modifier,
     currentLanguage: AppLanguage = AppLanguage.ENGLISH,
     initialCategoryKey: String = "SUGGESTION",
-    initialSubject: String = "",
-    appName: String = ""
+    initialSubject: String = ""
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
@@ -170,7 +130,7 @@ fun FeedbackModalSheet(
             }
 
             Text(
-                text = "Reports are logged for engineering review and routed to $SUPPORT_RECIPIENT_EMAIL.",
+                text = "Reports are logged and reviewed directly by the HsStore team.",
                 style = MaterialTheme.typography.bodySmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
             )
 
@@ -308,49 +268,6 @@ fun FeedbackModalSheet(
                     Spacer(modifier = Modifier.width(8.dp))
                     Text("Submit Report", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold))
                 }
-            }
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            // Fallback intent button routing directly to momiadesigner@gmail.com
-            OutlinedButton(
-                onClick = {
-                    val key = categoryKeys[selectedCategoryIndex]
-                    val telemetry = if (includeTelemetry) deviceInfo else "Telemetry disabled"
-                    val emailIntent = buildSupportEmailIntent(
-                        category = key,
-                        appName = appName,
-                        subject = subject.trim(),
-                        details = details.trim(),
-                        deviceInfo = telemetry
-                    )
-                    try {
-                        context.startActivity(emailIntent)
-                    } catch (_: ActivityNotFoundException) {
-                        Toast.makeText(context, "No email client installed ($SUPPORT_RECIPIENT_EMAIL)", Toast.LENGTH_SHORT).show()
-                    }
-                },
-                shape = CircleShape,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .testTag("send_via_email_fallback_btn")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Email,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = LocalizedStrings.get("feedback_email_fallback", currentLanguage),
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                )
             }
         }
     }

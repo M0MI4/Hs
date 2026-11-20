@@ -33,8 +33,19 @@ import java.io.InputStream
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-class DownloadJobState(
+data class DownloadJobState(
     @Volatile var hasCountedDownload: Boolean = false
+)
+
+data class SelfUpdateDownloadState(
+    val isDownloading: Boolean = false,
+    val progress: Float = 0f,
+    val downloadedBytes: Long = 0L,
+    val totalBytes: Long = 0L,
+    val filePath: String? = null,
+    val errorMessage: String? = null,
+    val isCompleted: Boolean = false,
+    val downloadId: Long = 0L
 )
 
 class DownloadRepository(
@@ -46,12 +57,20 @@ class DownloadRepository(
     private val scope = CoroutineScope(Dispatchers.IO)
     private val activeJobs = mutableMapOf<String, Job>()
     private val activeJobStates = ConcurrentHashMap<String, DownloadJobState>()
+    private var selfUpdateJob: Job? = null
 
     private val _tasks = MutableStateFlow<List<DownloadTask>>(emptyList())
     val tasks: StateFlow<List<DownloadTask>> = _tasks.asStateFlow()
 
+    private val _selfUpdateState = MutableStateFlow(SelfUpdateDownloadState())
+    val selfUpdateState: StateFlow<SelfUpdateDownloadState> = _selfUpdateState.asStateFlow()
+
     // Persistent APK storage directory inside filesDir (never cacheDir)
     private val apksDir = File(context.filesDir, "apks").apply {
+        if (!exists()) mkdirs()
+    }
+
+    private val selfUpdateDir = File(context.filesDir, "self_update").apply {
         if (!exists()) mkdirs()
     }
 
@@ -60,6 +79,8 @@ class DownloadRepository(
             restoreSavedTasks()
         }
     }
+
+    fun selfUpdateApkFile(): File = File(selfUpdateDir, "hsstore_update.apk")
 
     fun apkFileForApp(appId: String): File {
         val safeId = appId.trim().replace("[^a-zA-Z0-9._-]".toRegex(), "_").ifBlank { "app" }
@@ -72,6 +93,16 @@ class DownloadRepository(
             val restored = mutableListOf<DownloadTask>()
 
             for (entity in savedEntities) {
+                val isLegacySelfUpdate = entity.appId == "app_hsstore_self_update" ||
+                    entity.appId == "app_hsstore_update" ||
+                    entity.packageName == context.packageName
+                if (isLegacySelfUpdate) {
+                    downloadTaskDao.deleteById(entity.id)
+                    entity.localFilePath?.let { path ->
+                        try { File(path).delete() } catch (_: Exception) {}
+                    }
+                    continue
+                }
                 val file = entity.localFilePath?.let { File(it) } ?: apkFileForApp(entity.appId)
                 when (entity.status) {
                     DownloadStatus.COMPLETED.name -> {
@@ -131,6 +162,13 @@ class DownloadRepository(
     }
 
     fun startDownload(app: ModApp): String {
+        if (app.packageName == context.packageName ||
+            app.id == "app_hsstore_self_update" ||
+            app.id == "app_hsstore_update"
+        ) {
+            downloadSelfUpdate(app.downloadUrl)
+            return "self_update"
+        }
         val existing = _tasks.value.find { it.appId == app.id }
         if (existing != null && (existing.status == DownloadStatus.DOWNLOADING || existing.status == DownloadStatus.QUEUED)) {
             return existing.id
@@ -212,9 +250,17 @@ class DownloadRepository(
 
     fun installApk(context: Context, task: DownloadTask): Result<Unit> {
         val path = task.filePath ?: apkFileForApp(task.appId).absolutePath
-        val apkFile = File(path)
+        return installApkFile(context, File(path))
+    }
+
+    fun installSelfUpdateApk(context: Context): Result<Unit> {
+        val path = _selfUpdateState.value.filePath ?: selfUpdateApkFile().absolutePath
+        return installApkFile(context, File(path))
+    }
+
+    fun installApkFile(context: Context, apkFile: File): Result<Unit> {
         if (!apkFile.exists()) {
-            return Result.failure(Exception("File does not exist at $path"))
+            return Result.failure(Exception("File does not exist at ${apkFile.absolutePath}"))
         }
 
         return try {
@@ -230,6 +276,129 @@ class DownloadRepository(
         } catch (e: Exception) {
             Log.e("DownloadRepo", "Installation failed: ${e.message}", e)
             Result.failure(e)
+        }
+    }
+
+    fun cancelSelfUpdate() {
+        selfUpdateJob?.cancel()
+        selfUpdateJob = null
+        _selfUpdateState.value = SelfUpdateDownloadState()
+    }
+
+    fun downloadSelfUpdate(url: String) {
+        if (url.isBlank() || !url.startsWith("http")) {
+            _selfUpdateState.value = SelfUpdateDownloadState(
+                isDownloading = false,
+                errorMessage = "Invalid update download URL."
+            )
+            return
+        }
+        if (selfUpdateJob?.isActive == true && _selfUpdateState.value.isDownloading) {
+            return
+        }
+
+        selfUpdateJob?.cancel()
+        val targetFile = selfUpdateApkFile()
+        val currentDownloadId = System.currentTimeMillis()
+        _selfUpdateState.value = SelfUpdateDownloadState(
+            isDownloading = true,
+            progress = 0f,
+            downloadedBytes = 0L,
+            totalBytes = 0L,
+            filePath = targetFile.absolutePath,
+            errorMessage = null,
+            isCompleted = false,
+            downloadId = currentDownloadId
+        )
+
+        selfUpdateJob = scope.launch {
+            var outputStream: FileOutputStream? = null
+            var inputStream: InputStream? = null
+            try {
+                if (!selfUpdateDir.exists()) selfUpdateDir.mkdirs()
+                if (targetFile.exists()) targetFile.delete()
+
+                val response = RetrofitClient.apiService.downloadFileStream(url, null)
+                if (!response.isSuccessful) {
+                    _selfUpdateState.value = _selfUpdateState.value.copy(
+                        isDownloading = false,
+                        errorMessage = "Download failed (HTTP ${response.code()})"
+                    )
+                    return@launch
+                }
+
+                val body = response.body()
+                if (body == null) {
+                    _selfUpdateState.value = _selfUpdateState.value.copy(
+                        isDownloading = false,
+                        errorMessage = "Empty update response body."
+                    )
+                    return@launch
+                }
+
+                val totalBytes = body.contentLength().takeIf { it > 0L } ?: 15728640L
+                outputStream = FileOutputStream(targetFile, false)
+                inputStream = body.byteStream()
+
+                val buffer = ByteArray(8192)
+                var bytesRead: Int
+                var totalRead = 0L
+                var lastUpdateTime = 0L
+
+                while (isActive) {
+                    bytesRead = inputStream.read(buffer)
+                    if (bytesRead == -1) break
+
+                    outputStream.write(buffer, 0, bytesRead)
+                    totalRead += bytesRead
+
+                    val now = System.currentTimeMillis()
+                    if (now - lastUpdateTime >= 100L) {
+                        val progress = (totalRead.toFloat() / totalBytes.toFloat()).coerceIn(0f, 0.99f)
+                        _selfUpdateState.value = _selfUpdateState.value.copy(
+                            isDownloading = true,
+                            progress = progress,
+                            downloadedBytes = totalRead,
+                            totalBytes = totalBytes
+                        )
+                        lastUpdateTime = now
+                    }
+                }
+
+                outputStream.flush()
+                try { outputStream.close() } catch (_: Exception) {}
+                outputStream = null
+
+                if (isActive && targetFile.exists() && targetFile.length() > 0L) {
+                    val finalSize = targetFile.length()
+                    _selfUpdateState.value = _selfUpdateState.value.copy(
+                        isDownloading = false,
+                        progress = 1f,
+                        downloadedBytes = finalSize,
+                        totalBytes = finalSize,
+                        filePath = targetFile.absolutePath,
+                        errorMessage = null,
+                        isCompleted = true
+                    )
+                } else if (isActive) {
+                    _selfUpdateState.value = _selfUpdateState.value.copy(
+                        isDownloading = false,
+                        errorMessage = "Downloaded update file was empty."
+                    )
+                }
+            } catch (e: Exception) {
+                Log.e("DownloadRepo", "Self-update download error: ${e.message}", e)
+                if (isActive) {
+                    _selfUpdateState.value = _selfUpdateState.value.copy(
+                        isDownloading = false,
+                        errorMessage = e.message ?: "Download failed."
+                    )
+                }
+            } finally {
+                try { inputStream?.close() } catch (_: Exception) {}
+                try { outputStream?.close() } catch (_: Exception) {}
+                selfUpdateJob = null
+            }
         }
     }
 

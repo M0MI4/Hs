@@ -104,6 +104,14 @@ object InstalledAppDetector {
     ): AppInstallState {
         if (packageName.isBlank()) return AppInstallState.NOT_INSTALLED
         val info = getCachedOrInspect(context, packageName)
+        if (packageName == context.packageName) {
+            if (!info.isInstalled) return AppInstallState.NOT_INSTALLED
+            return if (info.versionCode >= storeVersionCode.toLong()) {
+                AppInstallState.INSTALLED_LATEST
+            } else {
+                AppInstallState.UPDATE_AVAILABLE
+            }
+        }
         return evaluateState(
             info = info,
             storeVersionCode = storeVersionCode,
@@ -124,6 +132,14 @@ object InstalledAppDetector {
         if (packageName.isBlank()) return AppInstallState.NOT_INSTALLED
         val freshInfo = inspectInstalledApp(context, packageName)
         appInfoCache[packageName] = freshInfo
+        if (packageName == context.packageName) {
+            if (!freshInfo.isInstalled) return AppInstallState.NOT_INSTALLED
+            return if (freshInfo.versionCode >= storeVersionCode.toLong()) {
+                AppInstallState.INSTALLED_LATEST
+            } else {
+                AppInstallState.UPDATE_AVAILABLE
+            }
+        }
         return evaluateState(
             info = freshInfo,
             storeVersionCode = storeVersionCode,
@@ -208,7 +224,7 @@ object InstalledAppDetector {
     }
 
     fun uninstallApp(context: Context, packageName: String): Boolean {
-        if (packageName.isBlank()) return false
+        if (packageName.isBlank() || packageName == context.packageName) return false
         return try {
             val intent = Intent(Intent.ACTION_DELETE).apply {
                 data = Uri.parse("package:$packageName")

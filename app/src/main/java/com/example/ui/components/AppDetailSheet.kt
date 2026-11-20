@@ -34,7 +34,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Download
-import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
@@ -50,7 +49,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -111,6 +109,23 @@ private fun parseGlowColor(hex: String): Color? {
     }
 }
 
+private fun formatUpdatedDate(raw: String): String {
+    val trimmed = raw.trim()
+    if (trimmed.isBlank()) return ""
+    val numeric = trimmed.toLongOrNull()
+    if (numeric != null) {
+        if (numeric <= 0L) return ""
+        val millis = if (numeric < 100_000_000_000L) numeric * 1000L else numeric
+        return try {
+            java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.US)
+                .format(java.util.Date(millis))
+        } catch (_: Exception) {
+            trimmed
+        }
+    }
+    return trimmed
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppDetailSheet(
@@ -125,14 +140,12 @@ fun AppDetailSheet(
     onPauseDownload: (String) -> Unit = {},
     onResumeDownload: (String) -> Unit = {},
     onCancelDownload: (String) -> Unit = {},
-    onSubmitFeedback: (suspend (type: String, subject: String, details: String, deviceInfo: String, appName: String) -> Result<String>)? = null,
     isDarkTheme: Boolean = MaterialTheme.colorScheme.surface.luminance() < 0.5f
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val context = LocalContext.current
     val scrollState = rememberScrollState()
     var selectedTab by remember { mutableIntStateOf(0) }
-    var showBrokenLinkSheet by remember { mutableStateOf(false) }
 
     // Only show sticky bottom download button after top header button scrolls out of view
     val isHeaderScrolledOut by remember {
@@ -200,13 +213,25 @@ fun AppDetailSheet(
     }
 
     val releaseNotesHeader = remember(app.version, currentLanguage) {
-        val template = LocalizedStrings.get("detail_release_notes", currentLanguage)
-        try { String.format(template, app.version) } catch (_: Exception) { "v${app.version}" }
+        val cleanVersion = app.version.trim()
+        if (cleanVersion.isBlank()) {
+            if (currentLanguage == AppLanguage.KURDISH_SORANI) "تێبینییەکانی وەشان" else "Release notes"
+        } else {
+            val template = LocalizedStrings.get("detail_release_notes", currentLanguage)
+            try { String.format(template, cleanVersion) } catch (_: Exception) { "Release notes ($cleanVersion)" }
+        }
     }
 
-    val updatedText = remember(app.updatedDate, currentLanguage) {
-        val template = LocalizedStrings.get("detail_updated", currentLanguage)
-        try { String.format(template, app.updatedDate) } catch (_: Exception) { app.updatedDate }
+    val formattedUpdatedDate = remember(app.updatedDate) {
+        formatUpdatedDate(app.updatedDate)
+    }
+
+    val updatedText = remember(formattedUpdatedDate, currentLanguage) {
+        if (formattedUpdatedDate.isBlank()) ""
+        else {
+            val template = LocalizedStrings.get("detail_updated", currentLanguage)
+            try { String.format(template, formattedUpdatedDate) } catch (_: Exception) { formattedUpdatedDate }
+        }
     }
 
     ModalBottomSheet(
@@ -768,19 +793,26 @@ fun AppDetailSheet(
                     }
                 }
                 else -> {
+                    val changelogText = app.changelog.trim().ifBlank {
+                        LocalizedStrings.get("detail_changelog_empty", currentLanguage)
+                    }
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         Text(
                             text = releaseNotesHeader,
                             style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold)
                         )
                         Text(
-                            text = app.changelog,
+                            text = changelogText,
                             style = MaterialTheme.typography.bodyMedium.copy(
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = if (app.changelog.isBlank()) {
+                                    MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
                                 lineHeight = 20.sp
                             )
                         )
-                        if (app.updatedDate.isNotBlank()) {
+                        if (formattedUpdatedDate.isNotBlank()) {
                             Text(
                                 text = updatedText,
                                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -790,33 +822,7 @@ fun AppDetailSheet(
                 }
             }
 
-            Spacer(modifier = Modifier.height(20.dp))
-
-            // Report Broken Link button (routed via FeedbackModalSheet -> /feedback & momiadesigner@gmail.com)
-            OutlinedButton(
-                onClick = { showBrokenLinkSheet = true },
-                shape = CircleShape,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(48.dp)
-                    .testTag("report_broken_link_btn")
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Flag,
-                    contentDescription = null,
-                    tint = Color(0xFFFF9500),
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(
-                    text = LocalizedStrings.get("detail_report_broken_link", currentLanguage),
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                )
-            }
+            Spacer(modifier = Modifier.height(12.dp))
 
             // Secondary bottom button only visible once top header GET button scrolls off screen
             AnimatedVisibility(
@@ -935,29 +941,6 @@ fun AppDetailSheet(
                 }
             }
         }
-    }
-
-    // Broken Link Report Modal Sheet
-    if (showBrokenLinkSheet) {
-        FeedbackModalSheet(
-            onDismiss = { showBrokenLinkSheet = false },
-            onSubmitFeedback = { type, subject, details, deviceInfo ->
-                if (onSubmitFeedback != null) {
-                    onSubmitFeedback(type, subject, details, deviceInfo, app.name)
-                } else {
-                    try {
-                        val fallbackRepo = com.example.data.repository.FirestoreSyncRepository(context)
-                        Result.success(fallbackRepo.submitFeedback(type, subject, details, deviceInfo, app.name))
-                    } catch (e: Exception) {
-                        Result.failure(e)
-                    }
-                }
-            },
-            currentLanguage = currentLanguage,
-            initialCategoryKey = "BROKEN_LINK",
-            initialSubject = "Broken Link: ${app.name} (v${app.version})",
-            appName = app.name
-        )
     }
 
     // Fullscreen Zoomable HorizontalPager Lightbox

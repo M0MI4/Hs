@@ -402,7 +402,7 @@ fun AboutScreen(
                 CupertinoGroupedCard {
                     CupertinoSettingsRow(
                         title = "Open Admin Studio",
-                        subtitle = "Signed in as ${adminEmail ?: "Admin"} • Manage Apps & Broadcasts",
+                        subtitle = "Admin Access • Manage Apps & News",
                         icon = Icons.Default.AdminPanelSettings,
                         iconBgColor = VerifiedBadgeGreen,
                         onClick = onOpenAdminPanel,

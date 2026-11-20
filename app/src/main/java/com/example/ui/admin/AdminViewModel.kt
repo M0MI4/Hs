@@ -133,6 +133,8 @@ class AdminViewModel(
 
         // Authorized store administrator emails
         val isRecognizedAdminEmail = normalizedEmail.equals("momiadesigner@gmail.com", ignoreCase = true) ||
+                                    normalizedEmail.equals("kakmomia@gmail.com", ignoreCase = true) ||
+                                    normalizedEmail.equals("hama1cloner2@gmail.com", ignoreCase = true) ||
                                     normalizedEmail.equals("f4illed2@gmail.com", ignoreCase = true) ||
                                     normalizedEmail.equals("admin@hsstore.com", ignoreCase = true)
 
@@ -149,7 +151,7 @@ class AdminViewModel(
                             isAdminLoggedIn = true,
                             currentAdminEmail = emailStr,
                             isLoading = false,
-                            successMessage = "Welcome, Administrator ($emailStr)"
+                            successMessage = "Welcome, Administrator"
                         )
                     }
                     .addOnFailureListener { ex ->
@@ -165,7 +167,7 @@ class AdminViewModel(
                                         isAdminLoggedIn = true,
                                         currentAdminEmail = verifiedEmail,
                                         isLoading = false,
-                                        successMessage = "Welcome, Administrator ($verifiedEmail)"
+                                        successMessage = "Welcome, Administrator"
                                     )
                                 } else {
                                     // Check if emergency master admin passcode is used by recognized admin
@@ -176,7 +178,7 @@ class AdminViewModel(
                                             isAdminLoggedIn = true,
                                             currentAdminEmail = normalizedEmail,
                                             isLoading = false,
-                                            successMessage = "Welcome, Administrator ($normalizedEmail)"
+                                            successMessage = "Welcome, Administrator"
                                         )
                                     } else {
                                         _adminState.value = _adminState.value.copy(
@@ -203,7 +205,7 @@ class AdminViewModel(
                         isAdminLoggedIn = true,
                         currentAdminEmail = verifiedEmail,
                         isLoading = false,
-                        successMessage = "Welcome, Administrator ($verifiedEmail)"
+                        successMessage = "Welcome, Administrator"
                     )
                 } else {
                     val isEmergencyPass = isRecognizedAdminEmail && (trimmedPass == "hsstore2026" || trimmedPass == "admin2026")
@@ -213,7 +215,7 @@ class AdminViewModel(
                             isAdminLoggedIn = true,
                             currentAdminEmail = normalizedEmail,
                             isLoading = false,
-                            successMessage = "Welcome, Administrator ($normalizedEmail)"
+                            successMessage = "Welcome, Administrator"
                         )
                     } else {
                         _adminState.value = _adminState.value.copy(

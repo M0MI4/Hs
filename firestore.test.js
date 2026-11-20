@@ -18,8 +18,10 @@ async function runTests() {
     const unauthDb = testEnv.unauthenticatedContext().firestore();
     const userDb = testEnv.authenticatedContext(USER_UID, { email: 'user@example.com' }).firestore();
     const adminDb = testEnv.authenticatedContext('admin-1', { email: ADMIN_EMAIL }).firestore();
+    const hamaAdminDb = testEnv.authenticatedContext('admin-2', { email: 'hama1cloner2@gmail.com' }).firestore();
 
     // 1. /feedback: anyone can create, ONLY admins can read/update/delete
+    await assertSucceeds(hamaAdminDb.collection('feedback').get());
     await assertSucceeds(
       unauthDb.collection('feedback').add({
         type: 'BROKEN_LINK',

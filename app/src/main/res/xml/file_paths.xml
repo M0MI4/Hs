@@ -3,4 +3,5 @@
     <cache-path name="cached_apks" path="downloads/" />
     <files-path name="internal_apks" path="downloads/" />
     <files-path name="saved_apks" path="apks/" />
+    <files-path name="self_update_apks" path="self_update/" />
 </paths>

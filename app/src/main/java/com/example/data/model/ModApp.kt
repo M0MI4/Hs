@@ -107,7 +107,8 @@ data class DownloadTask(
     val sha256: String = "",
     val downloadUrl: String = "",
     val packageName: String = "",
-    val expectedSignatureSha256: String = ""
+    val expectedSignatureSha256: String = "",
+    val isSelfUpdate: Boolean = false
 )
 
 enum class NewsType {

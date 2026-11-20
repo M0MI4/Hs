@@ -247,6 +247,7 @@ fun MainAppContent(
     // Downloads States from DownloadsViewModel
     val downloadTasks by downloadsViewModel.tasks.collectAsState()
     val activeDownloads by downloadsViewModel.activeDownloads.collectAsState()
+    val selfUpdateState by downloadsViewModel.selfUpdateState.collectAsState()
 
     // Verify Firebase App Configuration on startup (detect dummy credentials)
     val isFirebaseProperlyConfigured = remember(context) {
@@ -321,20 +322,14 @@ fun MainAppContent(
         }
     }
 
-    val selfUpdateTask = remember(downloadTasks) {
-        downloadTasks.find { it.appId == "app_hsstore_self_update" }
-    }
-    var autoTriggeredSelfInstallId by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(selfUpdateTask?.status, selfUpdateTask?.filePath) {
-        val task = selfUpdateTask
-        if (showSelfUpdateDialog &&
-            task != null &&
-            task.status == DownloadStatus.COMPLETED &&
-            !task.filePath.isNullOrBlank() &&
-            autoTriggeredSelfInstallId != task.id
+    var autoTriggeredSelfInstallId by remember { mutableStateOf<Long?>(null) }
+    LaunchedEffect(selfUpdateState.isCompleted, selfUpdateState.filePath, selfUpdateState.downloadId) {
+        if (selfUpdateState.isCompleted &&
+            !selfUpdateState.filePath.isNullOrBlank() &&
+            autoTriggeredSelfInstallId != selfUpdateState.downloadId
         ) {
-            autoTriggeredSelfInstallId = task.id
-            val installRes = downloadsViewModel.installApk(context, task)
+            autoTriggeredSelfInstallId = selfUpdateState.downloadId
+            val installRes = downloadsViewModel.installSelfUpdateApk(context)
             if (installRes.isFailure) {
                 Toast.makeText(context, "Installer: ${installRes.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
             }
@@ -710,9 +705,6 @@ fun MainAppContent(
                     onPauseDownload = { downloadsViewModel.pauseDownload(it) },
                     onResumeDownload = { downloadsViewModel.resumeDownload(it) },
                     onCancelDownload = { downloadsViewModel.cancelDownload(it) },
-                    onSubmitFeedback = { type, subject, details, deviceInfo, appName ->
-                        settingsViewModel.submitFeedback(type, subject, details, deviceInfo, appName)
-                    },
                     isDarkTheme = isDarkTheme
                 )
             }
@@ -723,23 +715,13 @@ fun MainAppContent(
                 CupertinoSelfUpdateDialog(
                     config = selfCfg,
                     currentLanguage = currentLanguage,
-                    downloadTask = selfUpdateTask,
+                    selfUpdateState = selfUpdateState,
                     onDismiss = { storeViewModel.dismissSelfUpdateDialog() },
                     onUpdateClick = {
-                        val selfUpdateApp = ModApp(
-                            id = "app_hsstore_self_update",
-                            name = "HsStore v${selfCfg.latestVersionName}",
-                            packageName = context.packageName,
-                            version = selfCfg.latestVersionName,
-                            versionCode = selfCfg.latestVersionCode.toInt(),
-                            sizeBytes = 0L,
-                            sizeDisplay = "",
-                            downloadUrl = selfCfg.downloadUrl
-                        )
-                        downloadsViewModel.startDownload(selfUpdateApp, currentUser)
+                        downloadsViewModel.startSelfUpdateDownload(selfCfg.downloadUrl)
                     },
-                    onInstallClick = { task ->
-                        val res = downloadsViewModel.installApk(context, task)
+                    onInstallSelfUpdateClick = {
+                        val res = downloadsViewModel.installSelfUpdateApk(context)
                         if (res.isFailure) {
                             Toast.makeText(context, "Installer: ${res.exceptionOrNull()?.message}", Toast.LENGTH_LONG).show()
                         }
@@ -754,19 +736,7 @@ fun MainAppContent(
                     onDismiss = { storeViewModel.dismissUpdateDialog() },
                     onDownloadUpdate = {
                         storeViewModel.dismissUpdateDialog()
-                        val updateApp = ModApp(
-                            id = "app_hsstore_update",
-                            name = "HsStore Cyber Upgrade",
-                            packageName = context.packageName,
-                            version = updateConfig!!.storeLatestVersion,
-                            versionCode = updateConfig!!.storeLatestVersionCode,
-                            sizeBytes = 14889779L,
-                            sizeDisplay = updateConfig!!.sizeDisplay,
-                            downloadUrl = updateConfig!!.downloadUrl,
-                            sha256 = updateConfig!!.sha256
-                        )
-                        downloadsViewModel.startDownload(updateApp, currentUser)
-                        settingsViewModel.setTab(MainTab.DOWNLOADS)
+                        downloadsViewModel.startSelfUpdateDownload(updateConfig!!.downloadUrl)
                         Toast.makeText(context, "Downloading HsStore v${updateConfig!!.storeLatestVersion} update...", Toast.LENGTH_SHORT).show()
                     }
                 )

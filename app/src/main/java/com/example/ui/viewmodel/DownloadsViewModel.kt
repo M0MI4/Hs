@@ -24,11 +24,31 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
     val downloadRepo = DownloadRepository(application.applicationContext)
     val firestoreRepo = FirestoreSyncRepository(application.applicationContext)
 
+    private val selfPackageName = application.packageName
+
+    val selfUpdateState = downloadRepo.selfUpdateState
+
     val tasks: StateFlow<List<DownloadTask>> = downloadRepo.tasks
+        .map { list ->
+            list.filter {
+                !it.isSelfUpdate &&
+                it.appId != "app_hsstore_self_update" &&
+                it.appId != "app_hsstore_update" &&
+                it.packageName != selfPackageName
+            }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     val activeDownloads: StateFlow<List<DownloadTask>> = tasks
         .map { list ->
-            list.filter { it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED }
+            list.filter {
+                !it.isSelfUpdate &&
+                (it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.QUEUED)
+            }
         }
         .stateIn(
             scope = viewModelScope,
@@ -40,7 +60,21 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
     val pendingReplaceAppId: StateFlow<String?> = _pendingReplaceAppId.asStateFlow()
     private var pendingReplaceRequestedAtMs: Long = 0L
 
+    fun startSelfUpdateDownload(url: String) = downloadRepo.downloadSelfUpdate(url)
+
+    fun cancelSelfUpdate() = downloadRepo.cancelSelfUpdate()
+
+    fun installSelfUpdateApk(context: Context): Result<Unit> =
+        downloadRepo.installSelfUpdateApk(context)
+
     fun startDownload(app: ModApp, user: FirebaseUser? = null): String {
+        if (app.packageName == selfPackageName ||
+            app.id == "app_hsstore_self_update" ||
+            app.id == "app_hsstore_update"
+        ) {
+            downloadRepo.downloadSelfUpdate(app.downloadUrl)
+            return "self_update"
+        }
         val taskId = downloadRepo.startDownload(app)
         if (user != null) {
             viewModelScope.launch {
@@ -62,14 +96,14 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
         downloadRepo.installApk(context, task)
 
     fun initiateReplaceUninstall(context: Context, app: ModApp): Boolean {
-        if (app.packageName.isBlank()) return false
+        if (app.packageName.isBlank() || app.packageName == context.packageName) return false
         _pendingReplaceAppId.value = app.id
         pendingReplaceRequestedAtMs = System.currentTimeMillis()
         return InstalledAppDetector.uninstallApp(context, app.packageName)
     }
 
     fun initiateReplaceUninstallByTask(context: Context, task: DownloadTask): Boolean {
-        if (task.packageName.isBlank()) return false
+        if (task.packageName.isBlank() || task.packageName == context.packageName) return false
         _pendingReplaceAppId.value = task.appId
         pendingReplaceRequestedAtMs = System.currentTimeMillis()
         return InstalledAppDetector.uninstallApp(context, task.packageName)
@@ -77,7 +111,7 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
 
     /**
      * Enforces SIGNATURE_MISMATCH check via live PackageManager before launching APK installer.
-     * Never calls installApk when a conflicting signature is installed.
+     * Never calls installApk when a conflicting signature is installed (except self-updates).
      */
     fun installOrReplaceCompletedApk(
         context: Context,
@@ -85,6 +119,9 @@ class DownloadsViewModel(application: Application) : AndroidViewModel(applicatio
         catalogApp: ModApp? = null
     ): Result<Unit> {
         val pkgName = catalogApp?.packageName?.ifBlank { null } ?: task.packageName
+        if (pkgName == context.packageName || task.isSelfUpdate) {
+            return installApk(context, task)
+        }
         val versionCode = catalogApp?.versionCode ?: task.versionCode
         val expectedSig = catalogApp?.expectedSignatureSha256?.ifBlank { null }
             ?: task.expectedSignatureSha256

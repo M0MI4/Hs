@@ -44,6 +44,7 @@ import com.example.data.model.AppUpdateConfig
 import com.example.data.model.DownloadStatus
 import com.example.data.model.DownloadTask
 import com.example.data.model.StoreSelfUpdateConfig
+import com.example.data.repository.SelfUpdateDownloadState
 import com.example.ui.i18n.AppLanguage
 import com.example.ui.i18n.LocalizedStrings
 
@@ -196,16 +197,23 @@ fun CupertinoSelfUpdateDialog(
     config: StoreSelfUpdateConfig,
     currentLanguage: AppLanguage = AppLanguage.ENGLISH,
     downloadTask: DownloadTask? = null,
+    selfUpdateState: SelfUpdateDownloadState? = null,
     onDismiss: () -> Unit,
     onUpdateClick: () -> Unit,
-    onInstallClick: (DownloadTask) -> Unit,
+    onInstallClick: (DownloadTask) -> Unit = {},
+    onInstallSelfUpdateClick: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
-    val isDownloading = downloadTask?.status == DownloadStatus.DOWNLOADING ||
-        downloadTask?.status == DownloadStatus.QUEUED
-    val isCompleted = downloadTask?.status == DownloadStatus.COMPLETED &&
-        !downloadTask.filePath.isNullOrBlank()
-    val progressPct = ((downloadTask?.progress ?: 0f) * 100).toInt().coerceIn(0, 100)
+    val isDownloading = selfUpdateState?.isDownloading
+        ?: (downloadTask?.status == DownloadStatus.DOWNLOADING ||
+            downloadTask?.status == DownloadStatus.QUEUED)
+    val isCompleted = selfUpdateState?.let {
+        it.isCompleted && !it.filePath.isNullOrBlank()
+    } ?: (downloadTask?.status == DownloadStatus.COMPLETED &&
+        !downloadTask.filePath.isNullOrBlank())
+    val progressValue = selfUpdateState?.progress ?: downloadTask?.progress ?: 0f
+    val progressPct = (progressValue * 100).toInt().coerceIn(0, 100)
+    val errorMessage = selfUpdateState?.errorMessage
 
     AlertDialog(
         onDismissRequest = {
@@ -322,7 +330,7 @@ fun CupertinoSelfUpdateDialog(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     LinearProgressIndicator(
-                        progress = { downloadTask?.progress ?: 0f },
+                        progress = { progressValue },
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(6.dp)
@@ -330,14 +338,27 @@ fun CupertinoSelfUpdateDialog(
                         color = MaterialTheme.colorScheme.primary,
                         trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
+                } else if (!errorMessage.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = errorMessage,
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
                 }
             }
         },
         confirmButton = {
             Button(
                 onClick = {
-                    if (isCompleted && downloadTask != null) {
-                        onInstallClick(downloadTask)
+                    if (isCompleted) {
+                        if (selfUpdateState != null) {
+                            onInstallSelfUpdateClick()
+                        } else if (downloadTask != null) {
+                            onInstallClick(downloadTask)
+                        }
                     } else if (!isDownloading) {
                         onUpdateClick()
                     }
