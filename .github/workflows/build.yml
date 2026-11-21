@@ -12,21 +12,20 @@ jobs:
           java-version: '17'
           distribution: 'temurin'
 
-      - name: Create debug and release keystores
+      - name: Restore permanent release keystore & create debug keystore
+        env:
+          RELEASE_KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
         run: |
           rm -f ./debug.keystore ./my-upload-key.jks
+          printf '%s' "$RELEASE_KEYSTORE_BASE64" | base64 -d > ./my-upload-key.jks
           keytool -genkey -v -keystore ./debug.keystore \
             -storepass android -alias androiddebugkey -keypass android \
             -keyalg RSA -keysize 2048 -validity 10000 \
             -dname "CN=Android Debug,O=Android,C=US"
-          keytool -genkey -v -keystore ./my-upload-key.jks \
-            -storepass android -alias upload -keypass android \
-            -keyalg RSA -keysize 2048 -validity 10000 \
-            -dname "CN=HsStore Release,O=HsStore,C=US"
 
       - name: Create google-services.json from Secret
         env:
-          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+          GOOGLE_SERVICES_JSON: ${{ [invalid URL]_SERVICES_JSON }}
         run: |
           mkdir -p app
           printf '%s' "$GOOGLE_SERVICES_JSON" > app/google-services.json
@@ -34,8 +33,8 @@ jobs:
       - name: Build Release & Debug APKs
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/my-upload-key.jks
-          STORE_PASSWORD: android
-          KEY_PASSWORD: android
+          STORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
         run: gradle assembleRelease assembleDebug
 
       - name: Upload APK
